@@ -7,6 +7,7 @@ import ConnectionManager from './components/ConnectionManager';
 import CallHistory from './components/CallHistory';
 import PinnedCalls from './components/PinnedCalls';
 import Tools from './components/Tools';
+import About from './components/About';
 import { playIncomingSound, playConnectedSound, playEndedSound } from './utils/sounds';
 import { getHistory, saveHistory } from './utils/history';
 import { getPinned, savePinned } from './utils/pins';
@@ -47,7 +48,7 @@ const App: React.FC = () => {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [history, setHistory] = useState<CallHistoryEntry[]>([]);
   const [pinned, setPinned] = useState<PinnedEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<'new' | 'recent' | 'pinned' | 'tools'>('new');
+  const [activeTab, setActiveTab] = useState<'new' | 'recent' | 'pinned' | 'tools' | 'about'>('new');
   
   const currentCallInfoRef = useRef<{ id: string, startTime: number } | null>(null);
   const prevCallStateRef = useRef<CallState | undefined>(undefined);
@@ -243,6 +244,12 @@ const App: React.FC = () => {
             >
               Tools
             </button>
+            <button 
+              onClick={() => setActiveTab('about')}
+              className={`flex-1 py-2 text-center font-semibold transition-colors ${activeTab === 'about' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'text-gray-400 hover:text-white'}`}
+            >
+              About
+            </button>
           </div>
           
           <div className="mt-6">
@@ -299,6 +306,9 @@ const App: React.FC = () => {
              {activeTab === 'tools' && (
               <Tools onRestore={handleRestore} />
             )}
+            {activeTab === 'about' && (
+              <About />
+            )}
           </div>
         </div>
       </div>
@@ -323,8 +333,27 @@ const App: React.FC = () => {
       case CallState.CONNECTED:
         return (
           <div className="relative w-full h-full flex flex-col items-center justify-center">
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm px-4 py-2 rounded-lg font-mono text-lg tracking-wider z-10" aria-live="off">
-              {formatTime(elapsedTime)}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center justify-center gap-x-4 gap-y-2 bg-black/50 backdrop-blur-sm px-4 py-2 rounded-lg z-10 max-w-[90vw] flex-wrap" aria-live="polite">
+              <div className="font-mono text-lg tracking-wider" aria-live="off">
+                {formatTime(elapsedTime)}
+              </div>
+              {(isMuted || isVideoOff) && (
+                  <div className="h-5 border-l border-gray-500 mx-2 hidden sm:block"></div>
+              )}
+              <div className="flex items-center gap-4">
+                  {isMuted && (
+                      <div className="flex items-center gap-1.5 text-yellow-400 animate-pulse" title="You are muted">
+                          <UnmuteIcon className="w-5 h-5" />
+                          <span className="font-semibold text-sm">Muted</span>
+                      </div>
+                  )}
+                  {isVideoOff && (
+                      <div className="flex items-center gap-1.5 text-yellow-400 animate-pulse" title="Your video is off">
+                          <VideoOffIcon className="w-5 h-5" />
+                          <span className="font-semibold text-sm">Video Off</span>
+                      </div>
+                  )}
+              </div>
             </div>
             <div className="w-full h-full bg-black">
               <VideoPlayer stream={remoteStream} muted={false} />
