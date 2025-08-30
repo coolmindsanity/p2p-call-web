@@ -8,3 +8,10 @@ export enum CallState {
   ENDED = 'ENDED',
   MEDIA_ERROR = 'MEDIA_ERROR',
 }
+
+export interface CallHistoryEntry {
+  id: string;
+  timestamp: number;
+  duration: number; // in seconds
+  alias?: string;
+}

@@ -1,11 +1,26 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
-import { CallState } from './types';
+import { CallState, CallHistoryEntry } from './types';
 import VideoPlayer from './components/VideoPlayer';
 import Controls from './components/Controls';
 import ConnectionManager from './components/ConnectionManager';
+import CallHistory from './components/CallHistory';
 import { playIncomingSound, playConnectedSound, playEndedSound } from './utils/sounds';
+import { getHistory, saveHistory } from './utils/history';
+import { formatTime } from './utils/format';
+
+const UnmuteIcon: React.FC<{className?: string}> = ({className}) => (
+ <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+  <path strokeLinecap="round" strokeLinejoin="round" d="M11.998 4.5a7.5 7.5 0 0 1 7.5 7.5v3.665l-3.42-3.42a.75.75 0 0 0-1.06 1.06l4.243 4.242-1.06 1.06-4.243-4.242a.75.75 0 0 0-1.06 1.06l3.42 3.42V19.5a.75.75 0 0 1-1.5 0v-2.131A7.502 7.502 0 0 1 4.5 12.165v-3.665a7.5 7.5 0 0 1 7.498-7.5Z" />
+  <path strokeLinecap="round" strokeLinejoin="round" d="M3.53 3.53 20.47 20.47" />
+</svg>
+);
+
+const VideoOffIcon: React.FC<{className?: string}> = ({className}) => (
+ <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5 4.5 21.75m11.25-11.25 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9A2.25 2.25 0 0 0 4.5 18.75Z" />
+</svg>
+);
 
 const App: React.FC = () => {
   const {
@@ -16,21 +31,25 @@ const App: React.FC = () => {
     isVideoOff,
     callState,
     errorMessage,
-    offer,
-    answer,
+    callId,
     startCall,
     joinCall,
-    acceptAnswer,
     toggleMute,
     toggleVideo,
     hangUp,
     reset,
   } = useWebRTC();
 
-  const [joinOffer, setJoinOffer] = useState('');
+  const [joinCallId, setJoinCallId] = useState('');
   const [elapsedTime, setElapsedTime] = useState(0);
-
+  const [history, setHistory] = useState<CallHistoryEntry[]>([]);
+  
+  const currentCallInfoRef = useRef<{ id: string, startTime: number } | null>(null);
   const prevCallStateRef = useRef<CallState | undefined>(undefined);
+  
+  useEffect(() => {
+    setHistory(getHistory());
+  }, []);
 
   useEffect(() => {
     const prevState = prevCallStateRef.current;
@@ -43,14 +62,31 @@ const App: React.FC = () => {
         break;
       case CallState.CONNECTED:
         playConnectedSound();
+        if (callId) {
+          currentCallInfoRef.current = { id: callId, startTime: Date.now() };
+        }
         break;
       case CallState.ENDED:
         playEndedSound();
+        if (currentCallInfoRef.current && elapsedTime > 3) { // Only save calls longer than 3 seconds
+          const newEntry: CallHistoryEntry = {
+            id: currentCallInfoRef.current.id,
+            timestamp: currentCallInfoRef.current.startTime,
+            duration: elapsedTime,
+          };
+          
+          setHistory(prevHistory => {
+            const updatedHistory = [newEntry, ...prevHistory.filter(h => h.id !== newEntry.id || h.timestamp !== newEntry.timestamp)];
+            saveHistory(updatedHistory);
+            return updatedHistory;
+          });
+        }
+        currentCallInfoRef.current = null;
         break;
     }
 
     prevCallStateRef.current = callState;
-  }, [callState]);
+  }, [callState, callId, elapsedTime]);
 
   useEffect(() => {
     if (callState === CallState.CONNECTED) {
@@ -65,24 +101,33 @@ const App: React.FC = () => {
   
   const handleHangUp = () => {
     hangUp();
-    setJoinOffer('');
+    setJoinCallId('');
   };
 
   const handleReset = () => {
     reset();
-    setJoinOffer('');
+    setJoinCallId('');
   };
   
   const handleJoinCall = () => {
-    if (joinOffer.trim()) {
-      joinCall(joinOffer);
+    if (joinCallId.trim()) {
+      joinCall(joinCallId.trim().toLowerCase());
     }
   };
+  
+  const handleRejoin = (id: string) => {
+    setJoinCallId(id);
+    joinCall(id);
+  };
 
-  const formatTime = (timeInSeconds: number) => {
-    const minutes = Math.floor(timeInSeconds / 60).toString().padStart(2, '0');
-    const seconds = (timeInSeconds % 60).toString().padStart(2, '0');
-    return `${minutes}:${seconds}`;
+  const handleUpdateHistoryAlias = (timestamp: number, alias: string) => {
+    setHistory(prevHistory => {
+      const updatedHistory = prevHistory.map(entry =>
+        entry.timestamp === timestamp ? { ...entry, alias: alias || undefined } : entry
+      );
+      saveHistory(updatedHistory);
+      return updatedHistory;
+    });
   };
 
   const renderContent = () => {
@@ -110,7 +155,23 @@ const App: React.FC = () => {
               <VideoPlayer stream={remoteStream} muted={false} />
             </div>
             <div className="absolute bottom-24 md:bottom-6 right-6 w-32 h-48 md:w-48 md:h-64 rounded-lg overflow-hidden shadow-lg border-2 border-indigo-500">
-              <VideoPlayer stream={localStream} muted={true} />
+              <div className="relative w-full h-full">
+                <VideoPlayer stream={localStream} muted={true} />
+                {(isMuted || isVideoOff) && (
+                  <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                    {isMuted && (
+                      <div className="p-1.5 bg-black/60 backdrop-blur-sm rounded-full" title="You are muted" aria-label="You are muted">
+                        <UnmuteIcon className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                    {isVideoOff && (
+                      <div className="p-1.5 bg-black/60 backdrop-blur-sm rounded-full" title="Your video is off" aria-label="Your video is off">
+                        <VideoOffIcon className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <Controls
               onToggleMute={toggleMute}
@@ -123,36 +184,41 @@ const App: React.FC = () => {
         );
       case CallState.IDLE:
         return (
-          <div className="flex flex-col items-center justify-center gap-6 w-full max-w-md px-4">
+          <div className="flex flex-col items-center justify-center gap-6 w-full max-w-sm px-4">
             <h1 className="text-4xl md:text-5xl font-bold text-center tracking-tight">P2P Video Call</h1>
             <p className="text-gray-400">Secure, serverless video chat.</p>
-            <div className="w-full space-y-4 mt-4">
-              <button onClick={startCall} className="w-full px-8 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold transition-transform transform hover:scale-105">
-                Create Call
-              </button>
-              <div className="flex items-center gap-4">
+            <div className="w-full space-y-4 mt-4 p-6 bg-gray-800/50 rounded-lg">
+              <div className="space-y-2">
+                 <label htmlFor="call-id-input" className="font-medium text-gray-300">Join a Call</label>
+                 <div className="flex gap-2">
+                    <input 
+                      id="call-id-input"
+                      value={joinCallId}
+                      onChange={(e) => setJoinCallId(e.target.value)}
+                      placeholder="Enter call ID..."
+                      className="flex-grow px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      aria-label="Enter call ID to join"
+                    />
+                    <button 
+                      onClick={handleJoinCall} 
+                      disabled={!joinCallId.trim()}
+                      className="px-6 py-3 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                      aria-label="Join Call"
+                    >
+                      Join
+                    </button>
+                 </div>
+              </div>
+               <div className="flex items-center gap-4">
                 <hr className="flex-grow border-gray-700" />
                 <span className="text-gray-500 font-medium">OR</span>
                 <hr className="flex-grow border-gray-700" />
               </div>
-              <div className="space-y-2">
-                <textarea 
-                  value={joinOffer}
-                  onChange={(e) => setJoinOffer(e.target.value)}
-                  placeholder="Paste peer's call info to join..."
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                  rows={4}
-                  aria-label="Peer's call info"
-                />
-                <button 
-                  onClick={handleJoinCall} 
-                  disabled={!joinOffer.trim()}
-                  className="w-full px-8 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-transform transform hover:scale-105 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed disabled:transform-none"
-                >
-                  Join Call
-                </button>
-              </div>
+               <button onClick={startCall} className="w-full px-8 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold transition-transform transform hover:scale-105">
+                Create a New Call
+              </button>
             </div>
+            <CallHistory history={history} onRejoin={handleRejoin} onUpdateAlias={handleUpdateHistoryAlias} />
           </div>
         );
       case CallState.ENDED:
@@ -183,16 +249,28 @@ const App: React.FC = () => {
              <div className="flex flex-col md:flex-row gap-4">
                 <div className="w-full md:w-1/3 flex-shrink-0">
                   <h2 className="text-xl font-semibold mb-2 text-center">Your Video</h2>
-                  <div className="aspect-video bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-700">
+                  <div className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-700">
                     <VideoPlayer stream={localStream} muted={true} />
+                     {(isMuted || isVideoOff) && (
+                      <div className="absolute top-2 left-2 flex items-center gap-2">
+                        {isMuted && (
+                          <div className="p-2 bg-black/60 backdrop-blur-sm rounded-full" title="You are muted" aria-label="You are muted">
+                            <UnmuteIcon className="w-5 h-5 text-white" />
+                          </div>
+                        )}
+                        {isVideoOff && (
+                          <div className="p-2 bg-black/60 backdrop-blur-sm rounded-full" title="Your video is off" aria-label="Your video is off">
+                            <VideoOffIcon className="w-5 h-5 text-white" />
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <ConnectionManager 
                   callState={callState}
                   connectionState={connectionState}
-                  offer={offer}
-                  answer={answer}
-                  onAcceptAnswer={acceptAnswer}
+                  callId={callId}
                   onCancel={handleHangUp}
                 />
             </div>
