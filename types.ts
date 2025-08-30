@@ -15,3 +15,8 @@ export interface CallHistoryEntry {
   duration: number; // in seconds
   alias?: string;
 }
+
+export interface PinnedEntry {
+  id: string;
+  alias?: string;
+}
