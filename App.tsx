@@ -537,7 +537,7 @@ const App: React.FC = () => {
                     </div>
                     
                     <div className="w-full max-w-2xl mt-8 relative glass-container-glow">
-                        <div className="relative bg-black/30 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden">
+                        <div className="relative glass-card-background backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden">
                             <div className="border-b border-gray-200/10 px-4 md:px-8">
                                 <nav className="-mb-px flex space-x-6 justify-center" aria-label="Tabs">
                                     {tabs.map(tab => (
