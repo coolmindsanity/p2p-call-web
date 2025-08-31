@@ -7,6 +7,8 @@ interface ControlsProps {
   isMuted: boolean;
   isVideoOff: boolean;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onToggleChat: () => void;
+  unreadMessageCount: number;
 }
 
 const MuteIcon: React.FC<{className?: string}> = ({className}) => (
@@ -49,8 +51,13 @@ const HangUpIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
+const ChatIcon: React.FC<{className?: string}> = ({className}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.761 9.761 0 0 1-2.542-.381 1.483 1.483 0 0 0-.97-.03c-.559.134-1.25.333-1.928.562a1.483 1.483 0 0 1-1.827-1.19c-.247-.817-.398-1.72-.398-2.655A8.25 8.25 0 0 1 12 3.75a8.25 8.25 0 0 1 9 8.25Z" />
+    </svg>
+);
 
-const Controls = forwardRef<HTMLDivElement, ControlsProps>(({ onToggleMute, onToggleVideo, onHangUp, isMuted, isVideoOff, onPointerDown }, ref) => {
+const Controls = forwardRef<HTMLDivElement, ControlsProps>(({ onToggleMute, onToggleVideo, onHangUp, isMuted, isVideoOff, onPointerDown, onToggleChat, unreadMessageCount }, ref) => {
   return (
     <div 
       ref={ref}
@@ -72,6 +79,17 @@ const Controls = forwardRef<HTMLDivElement, ControlsProps>(({ onToggleMute, onTo
         title={isVideoOff ? 'Turn video on' : 'Turn video off'}
       >
         {isVideoOff ? <VideoOffIcon className="w-6 h-6 text-white"/> : <VideoOnIcon className="w-6 h-6 text-white" />}
+      </button>
+      <button 
+        onClick={onToggleChat} 
+        className="p-3 bg-gray-500/50 hover:bg-gray-500/70 rounded-full transition-colors relative"
+        aria-label="Toggle chat"
+        title="Toggle chat"
+      >
+        <ChatIcon className="w-6 h-6 text-white" />
+        {unreadMessageCount > 0 && (
+            <span className="absolute top-0 right-0 block h-3 w-3 rounded-full bg-red-500 ring-2 ring-gray-900" />
+        )}
       </button>
       <button 
         onClick={onHangUp} 

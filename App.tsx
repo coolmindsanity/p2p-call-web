@@ -1,9 +1,6 @@
-
-
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
-import { CallState, CallHistoryEntry, PinnedEntry, CallStats, IncomingCall, PeerStatus } from './types';
+import { CallState, CallHistoryEntry, PinnedEntry, CallStats, IncomingCall, PeerStatus, ChatMessage } from './types';
 import VideoPlayer from './components/VideoPlayer';
 import Controls from './components/Controls';
 import ConnectionManager from './components/ConnectionManager';
@@ -14,6 +11,8 @@ import About from './components/About';
 import IncomingCallScreen from './components/IncomingCall';
 import Lobby from './components/Lobby';
 import MediaErrorScreen from './components/MediaErrorScreen';
+import ChatPanel from './components/ChatPanel';
+import FloatingVideo from './components/FloatingVideo';
 import { playIncomingSound, playConnectedSound, playEndedSound, playRingingSound, stopRingingSound } from './utils/sounds';
 import { getHistory, saveHistory } from './utils/history';
 import { getPinned, savePinned } from './utils/pins';
@@ -21,7 +20,6 @@ import { getUserId } from './utils/user';
 import { db } from './firebase';
 import { formatTime } from './utils/format';
 import { useDraggable } from './hooks/useDraggable';
-import { usePinchToZoom } from './hooks/usePinchToZoom';
 import { usePresence } from './hooks/usePresence';
 import { usePeerStatus } from './hooks/usePeerStatus';
 
@@ -181,14 +179,19 @@ const App: React.FC = () => {
     const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
     const [activeTab, setActiveTab] = useState<'new' | 'recent' | 'pinned' | 'tools' | 'about'>('new');
     const [joinInput, setJoinInput] = useState('');
+    const [joinInputError, setJoinInputError] = useState<string | null>(null);
     const [installPrompt, setInstallPrompt] = useState<any>(null);
     const [peerToRing, setPeerToRing] = useState<PinnedEntry | null>(null);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [isChatVisible, setIsChatVisible] = useState(false);
+    const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
     const {
         localStream, remoteStream, connectionState, isMuted, isVideoOff, callState, setCallState,
         errorMessage, callId, peerId, isE2EEActive, callStats, resolution, setResolution,
         enableE2EE, setEnableE2EE,
         enterLobby, startCall, joinCall, ringUser, declineCall, toggleMute, toggleVideo, hangUp, reset,
+        setOnMessage, sendMessage,
     } = useWebRTC('720p');
 
     usePresence(userId);
@@ -197,17 +200,28 @@ const App: React.FC = () => {
 
     const controlsRef = useRef<HTMLDivElement>(null);
     const { onPointerDown: onControlsPointerDown } = useDraggable(controlsRef);
-    
-    const remoteVideoContainerRef = useRef<HTMLDivElement>(null);
-    const remoteVideoRef = useRef<HTMLVideoElement>(null);
-    const { zoom, onTouchStart, onTouchMove, onTouchEnd, isPinching } = usePinchToZoom();
 
     const [callDuration, setCallDuration] = useState(0);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const callStartTimeRef = useRef<number | null>(null);
     const callDetailsForHistoryRef = useRef<{ callId: string; peerId?: string; alias?: string } | null>(null);
 
-    // PWA install prompt effect
+    const validateCallId = useCallback((id: string): boolean => {
+        const trimmedId = id.trim();
+        if (!trimmedId) {
+            setJoinInputError(null);
+            return true; // Don't show an error for an empty field until submission is attempted
+        }
+        // expecting adjective-noun-verb
+        const pattern = /^[a-z]+-[a-z]+-[a-z]+$/;
+        if (!pattern.test(trimmedId)) {
+            setJoinInputError('Invalid format. Expected: word-word-word');
+            return false;
+        }
+        setJoinInputError(null);
+        return true;
+    }, []);
+
     useEffect(() => {
         const handler = (e: Event) => {
             e.preventDefault();
@@ -217,16 +231,12 @@ const App: React.FC = () => {
         return () => window.removeEventListener('beforeinstallprompt', handler);
     }, []);
 
-    // Firebase incoming call listener
     useEffect(() => {
         if (!userId) return;
         const incomingCallRef = db.ref(`users/${userId}/incomingCall`);
         const listener = (snapshot: any) => {
             const call = snapshot.val();
             if (call) {
-                // Only set to INCOMING_CALL if we are in an idle state.
-                // This prevents the UI from flashing back to the incoming call screen
-                // after the user has already clicked "Accept" and is moving to the lobby.
                 if ([CallState.IDLE, CallState.ENDED, CallState.DECLINED].includes(callState)) {
                     setIncomingCall(call);
                     setCallState(CallState.INCOMING_CALL);
@@ -242,7 +252,6 @@ const App: React.FC = () => {
         return () => incomingCallRef.off('value', listener);
     }, [userId, callState, setCallState]);
 
-    // Call state effects (sounds, timer, history)
     useEffect(() => {
         const findAlias = (pId: string | null) => {
             if (!pId) return undefined;
@@ -296,6 +305,27 @@ const App: React.FC = () => {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [callState, callId, peerId]);
+    
+    useEffect(() => {
+        if (callState === CallState.CONNECTED) {
+            setOnMessage(
+                (data: string) => {
+                    setMessages(prev => [...prev, { text: data, sender: 'peer', timestamp: Date.now() }]);
+                    if (!isChatVisible) {
+                        setUnreadMessageCount(prev => prev + 1);
+                    }
+                }
+            );
+        }
+    }, [callState, isChatVisible, setOnMessage]);
+
+    useEffect(() => {
+        if (callState === CallState.ENDED || callState === CallState.IDLE || callState === CallState.DECLINED) {
+            setMessages([]);
+            setIsChatVisible(false);
+            setUnreadMessageCount(0);
+        }
+    }, [callState]);
 
     useEffect(() => {
         saveHistory(history);
@@ -304,6 +334,20 @@ const App: React.FC = () => {
     useEffect(() => {
         savePinned(pinned);
     }, [pinned]);
+    
+    const handleSendMessage = useCallback((text: string) => {
+        sendMessage(text);
+        setMessages(prev => [...prev, { text, sender: 'me', timestamp: Date.now() }]);
+    }, [sendMessage]);
+
+    const handleToggleChat = useCallback(() => {
+        setIsChatVisible(prev => {
+            if (!prev) {
+                setUnreadMessageCount(0);
+            }
+            return !prev;
+        });
+    }, []);
 
     const handleJoin = useCallback((id: string) => {
         if (!id.trim()) return;
@@ -312,6 +356,7 @@ const App: React.FC = () => {
 
     const handleRejoin = useCallback((id: string) => {
         setJoinInput(id);
+        setJoinInputError(null);
         enterLobby();
     }, [enterLobby]);
 
@@ -325,6 +370,7 @@ const App: React.FC = () => {
             enterLobby();
         } else {
             setJoinInput(pin.callId);
+            setJoinInputError(null);
             enterLobby();
         }
     }, [enterLobby]);
@@ -433,8 +479,27 @@ const App: React.FC = () => {
     
     const handleStartNewCallFlow = useCallback(() => {
         setJoinInput('');
+        setJoinInputError(null);
         enterLobby();
     }, [enterLobby]);
+
+    const handleAttemptJoin = useCallback(() => {
+        const trimmedId = joinInput.trim();
+        if (!trimmedId) {
+            setJoinInputError('Call ID cannot be empty.');
+            return;
+        }
+        if (validateCallId(trimmedId)) {
+            enterLobby();
+        }
+    }, [joinInput, enterLobby, validateCallId]);
+
+    const handleJoinInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        setJoinInput(value);
+        validateCallId(value);
+    }, [validateCallId]);
+
 
     const renderTabContent = () => {
         switch(activeTab) {
@@ -455,17 +520,28 @@ const App: React.FC = () => {
                         </div>
 
                         <div className="w-full flex flex-col sm:flex-row gap-3">
-                            <input
-                                type="text"
-                                value={joinInput}
-                                onChange={(e) => setJoinInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && joinInput.trim() && enterLobby()}
-                                placeholder="Enter Call ID to join"
-                                className="flex-grow w-full px-4 py-3 bg-gray-800/50 border-2 border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-shadow"
-                            />
+                            <div className="flex-grow w-full">
+                                <input
+                                    type="text"
+                                    value={joinInput}
+                                    onChange={handleJoinInputChange}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleAttemptJoin()}
+                                    placeholder="Enter Call ID to join"
+                                    className={`flex-grow w-full px-4 py-3 bg-gray-800/50 border-2 rounded-lg focus:outline-none focus:ring-2 focus:border-purple-500 transition-all ${
+                                        joinInputError ? 'border-red-500 focus:ring-red-500' : 'border-gray-700 focus:ring-purple-500'
+                                    }`}
+                                    aria-invalid={!!joinInputError}
+                                    aria-describedby="call-id-error"
+                                />
+                                {joinInputError && (
+                                    <p id="call-id-error" className="text-red-400 text-sm mt-1.5" role="alert">
+                                        {joinInputError}
+                                    </p>
+                                )}
+                            </div>
                             <button
-                                onClick={() => joinInput.trim() && enterLobby()}
-                                disabled={!joinInput.trim()}
+                                onClick={handleAttemptJoin}
+                                disabled={!joinInput.trim() || !!joinInputError}
                                 className="w-full sm:w-auto px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
                             >
                                 Join Call
@@ -486,7 +562,6 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen text-slate-200">
-            {/* Main Page UI: Only rendered when in an idle state */}
             {showMainPage && (
                 <div className="relative container mx-auto px-4 py-8 md:py-16 flex flex-col items-center gap-10">
                     <div className="text-center">
@@ -522,7 +597,6 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* Full-screen states that replace the main UI */}
             {callState === CallState.MEDIA_ERROR && <MediaErrorScreen errorMessage={errorMessage} onRetry={reset} />}
             {callState === CallState.INCOMING_CALL && incomingCall && <IncomingCallScreen callInfo={incomingCall} callerDisplayName={callerDisplayName} onAccept={() => enterLobby()} onDecline={handleDeclineCall} />}
             {callState === CallState.LOBBY && (
@@ -531,17 +605,14 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* Overlays for connecting and active call states */}
             {isConnecting && (
                 <div className="absolute inset-0 bg-gray-950/90 backdrop-blur-md flex items-center justify-center z-20">
                     <ConnectionManager callState={callState} connectionState={connectionState} callId={callId} peerId={peerId} pinnedContacts={pinned} onCancel={handleCancelConnecting} />
                 </div>
             )}
             {(callState === CallState.CONNECTED || callState === CallState.RECONNECTING) && (
-                <div className="absolute inset-0 bg-black">
-                    <div ref={remoteVideoContainerRef} className="w-full h-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-                        <VideoPlayer ref={remoteVideoRef} stream={remoteStream} muted={false} style={{ transform: `scale(${zoom})`, transition: isPinching ? 'none' : 'transform 0.1s linear' }} />
-                    </div>
+                <div className="absolute inset-0 bg-black/70 backdrop-blur-sm overflow-hidden">
+                    <FloatingVideo stream={remoteStream} />
                     <div className="absolute bottom-6 right-6 w-32 h-auto md:w-48 aspect-video rounded-lg overflow-hidden shadow-lg border-2 border-white/20">
                         <VideoPlayer stream={localStream} muted={true} />
                         {(isMuted || isVideoOff) && (
@@ -556,7 +627,13 @@ const App: React.FC = () => {
                         {callStats && <CallQualityIndicator stats={callStats} />}
                         <span className="font-mono text-white text-sm">{formatTime(callDuration)}</span>
                     </div>
-                    <Controls ref={controlsRef} onPointerDown={onControlsPointerDown} onToggleMute={toggleMute} onToggleVideo={toggleVideo} onHangUp={handleHangUp} isMuted={isMuted} isVideoOff={isVideoOff} />
+                    <Controls ref={controlsRef} onPointerDown={onControlsPointerDown} onToggleMute={toggleMute} onToggleVideo={toggleVideo} onHangUp={handleHangUp} isMuted={isMuted} isVideoOff={isVideoOff} onToggleChat={handleToggleChat} unreadMessageCount={unreadMessageCount} />
+                    <ChatPanel 
+                        isVisible={isChatVisible}
+                        messages={messages}
+                        onSendMessage={handleSendMessage}
+                        onClose={() => setIsChatVisible(false)}
+                    />
                 </div>
             )}
         </div>

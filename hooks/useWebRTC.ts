@@ -45,12 +45,24 @@ export const useWebRTC = (initialResolution: string) => {
   const lastStatsRef = useRef<{ timestamp: number, totalBytesSent: number, totalBytesReceived: number } | null>(null);
   const hasConnectedOnceRef = useRef(false);
 
-  // FIX: Use a useEffect to keep the ref in sync with the state. This is a robust pattern
-  // to ensure that callbacks always have access to the latest stream via the ref,
-  // preventing stale closures.
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const onMessageCallbackRef = useRef<((data: string) => void) | null>(null);
+
   useEffect(() => {
     localStreamRef.current = localStream;
   }, [localStream]);
+
+  const setOnMessage = useCallback((callback: (data: string) => void) => {
+    onMessageCallbackRef.current = callback;
+  }, []);
+
+  const sendMessage = useCallback((message: string) => {
+    if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+        dataChannelRef.current.send(message);
+    } else {
+        console.error("Data channel is not open. Cannot send message.");
+    }
+  }, []);
 
   const cleanUp = useCallback((keepCallDoc = false) => {
     if (peerConnectionRef.current) {
@@ -58,18 +70,16 @@ export const useWebRTC = (initialResolution: string) => {
       peerConnectionRef.current = null;
     }
     
-    // Use the ref to stop tracks, as it's guaranteed to be the most current stream
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
     }
-    setLocalStream(null); // This will trigger the useEffect to null out the ref
+    setLocalStream(null);
 
     if(remoteStream) {
       remoteStream.getTracks().forEach(track => track.stop());
       setRemoteStream(null);
     }
     
-    // Detach all Firebase listeners
     if (callDocRef.current) callDocRef.current.off();
     if (answerCandidatesRef.current) answerCandidatesRef.current.off();
     if (offerCandidatesRef.current) offerCandidatesRef.current.off();
@@ -82,8 +92,13 @@ export const useWebRTC = (initialResolution: string) => {
     ringingTimeoutRef.current = null;
     statsIntervalRef.current = null;
     
-    // Deleting the call document from the database is crucial for allowing the call ID to be reused.
     if (callDocRef.current && !keepCallDoc) callDocRef.current.remove();
+
+    if (dataChannelRef.current) {
+        dataChannelRef.current.close();
+        dataChannelRef.current = null;
+    }
+    onMessageCallbackRef.current = null;
 
     callDocRef.current = null;
     answerCandidatesRef.current = null;
@@ -104,23 +119,19 @@ export const useWebRTC = (initialResolution: string) => {
       const myUserId = getUserId();
       const callRef = db.ref(`calls/${incomingCallId}`);
       
-      // If peerToRingId is provided, it means the CALLER is cancelling the ring.
       if (peerToRingId) {
           const calleeIncomingCallRef = db.ref(`users/${peerToRingId}/incomingCall`);
           await calleeIncomingCallRef.remove();
       } 
-      // Otherwise, the CALLEE is declining the call.
       else {
           const myIncomingCallRef = db.ref(`users/${myUserId}/incomingCall`);
           await myIncomingCallRef.remove();
       }
 
-      // Mark the call as declined so the other party is notified.
       await callRef.update({ declined: true });
       
-      // Clean up local state.
-      cleanUp(true); // Keep call doc briefly for the 'declined' flag to propagate.
-      setTimeout(() => callRef.remove(), 2000); // Remove call doc after a delay.
+      cleanUp(true);
+      setTimeout(() => callRef.remove(), 2000);
       setCallState(CallState.IDLE);
   }, [cleanUp]);
   
@@ -135,7 +146,6 @@ export const useWebRTC = (initialResolution: string) => {
 
   const initMedia = useCallback(async (res: string) => {
     try {
-      // If there's an existing stream, stop all its tracks to release the camera.
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
       }
@@ -145,7 +155,6 @@ export const useWebRTC = (initialResolution: string) => {
       const videoConstraints = RESOLUTION_CONSTRAINTS[res as keyof typeof RESOLUTION_CONSTRAINTS] || RESOLUTION_CONSTRAINTS['720p'];
       const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: true });
 
-      // Set initial mute/video state from component state, in case it was toggled in the lobby
       stream.getAudioTracks().forEach(t => t.enabled = !isMuted);
       stream.getVideoTracks().forEach(t => t.enabled = !isVideoOff);
       setLocalStream(stream);
@@ -169,8 +178,6 @@ export const useWebRTC = (initialResolution: string) => {
   }, [isMuted, isVideoOff]);
   
   useEffect(() => {
-    // If we are in the lobby and the resolution changes, re-initialize the media stream
-    // to reflect the new quality setting in the preview.
     if (callState === CallState.LOBBY) {
         initMedia(resolution);
     }
@@ -199,7 +206,7 @@ export const useWebRTC = (initialResolution: string) => {
           await callDocRef.current.update({ offer });
       } catch (error) {
           console.error("Failed to restart ICE connection:", error);
-          hangUp(); // If restart fails, end the call to avoid getting stuck.
+          hangUp();
       }
   }, [hangUp]);
 
@@ -213,6 +220,15 @@ export const useWebRTC = (initialResolution: string) => {
     pc.ontrack = (event) => {
       setRemoteStream(event.streams[0]);
     };
+    
+    pc.ondatachannel = (event) => {
+        dataChannelRef.current = event.channel;
+        dataChannelRef.current.onmessage = (e) => {
+            onMessageCallbackRef.current?.(e.data);
+        };
+        dataChannelRef.current.onopen = () => console.log('Data channel opened by peer.');
+        dataChannelRef.current.onclose = () => console.log('Data channel closed by peer.');
+    };
 
     pc.onconnectionstatechange = () => {
       if (pc) {
@@ -221,7 +237,7 @@ export const useWebRTC = (initialResolution: string) => {
         if (pc.connectionState === 'connected') {
           hasConnectedOnceRef.current = true;
           if (ringingTimeoutRef.current) clearTimeout(ringingTimeoutRef.current);
-          reconnectionAttemptsRef.current = 0; // Reset attempts on successful connection
+          reconnectionAttemptsRef.current = 0;
           if (reconnectionTimerRef.current) {
             clearTimeout(reconnectionTimerRef.current);
             reconnectionTimerRef.current = null;
@@ -258,7 +274,6 @@ export const useWebRTC = (initialResolution: string) => {
                 if (timeDiffSeconds > 0) {
                     const sentDiff = totalBytesSent - lastStatsRef.current.totalBytesSent;
                     const receivedDiff = totalBytesReceived - lastStatsRef.current.totalBytesReceived;
-                    // Bitrate in kbps = (bytes * 8) / (time_in_seconds * 1000)
                     newStats.uploadBitrate = Math.round((sentDiff * 8) / (timeDiffSeconds * 1000));
                     newStats.downloadBitrate = Math.round((receivedDiff * 8) / (timeDiffSeconds * 1000));
                 }
@@ -276,11 +291,9 @@ export const useWebRTC = (initialResolution: string) => {
              }
           }
         } else if (pc.connectionState === 'failed') {
-          // The 'failed' state is terminal. We should end the call for both parties.
           console.error("Peer connection failed. Hanging up.");
           hangUp();
         } else if (pc.connectionState === 'disconnected') {
-          // This state can be temporary. The caller will attempt to reconnect.
           setIsE2EEActive(false);
           setCallStats(null);
           if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
@@ -327,6 +340,14 @@ export const useWebRTC = (initialResolution: string) => {
     const pc = createPeerConnection(localStreamRef.current);
     setCallId(id);
 
+    const dc = pc.createDataChannel('chat');
+    dc.onopen = () => console.log('Data channel opened.');
+    dc.onclose = () => console.log('Data channel closed.');
+    dc.onmessage = (e) => {
+        onMessageCallbackRef.current?.(e.data);
+    };
+    dataChannelRef.current = dc;
+
     callDocRef.current = db.ref(`calls/${id}`);
     offerCandidatesRef.current = callDocRef.current.child('offerCandidates');
     answerCandidatesRef.current = callDocRef.current.child('answerCandidates');
@@ -347,7 +368,6 @@ export const useWebRTC = (initialResolution: string) => {
     const callDataToSet: { [key: string]: any } = { offer, callerId };
     
     if (enableE2EE) {
-        // Generate a new encryption key for this call.
         const { key, rawKey } = await generateKey();
         encryptionKeyRef.current = key;
         const exportableKey = Array.from(new Uint8Array(rawKey));
@@ -401,7 +421,7 @@ export const useWebRTC = (initialResolution: string) => {
         return;
     }
     const newCallId = generateCallId();
-    setPeerId(peer.peerId); // Set who we are calling
+    setPeerId(peer.peerId);
     setCallId(newCallId);
 
     const myUserId = getUserId();
@@ -421,9 +441,8 @@ export const useWebRTC = (initialResolution: string) => {
 
     await initiateCall(newCallId, true);
 
-    // Set a timeout to cancel the ring if there's no answer
     ringingTimeoutRef.current = setTimeout(() => {
-        declineCall(newCallId, peer.peerId); // Clean up for the other user and self
+        declineCall(newCallId, peer.peerId);
     }, RING_TIMEOUT_MS);
 
   }, [initiateCall, declineCall]);
@@ -442,7 +461,6 @@ export const useWebRTC = (initialResolution: string) => {
     const callSnapshot = await callRef.get();
     const callData = callSnapshot.val();
       
-    // If the call document exists and has an offer, we are joining.
     if (callData?.offer) {
       if (!localStreamRef.current) {
         console.error("Cannot join call without a local stream.");
@@ -458,7 +476,6 @@ export const useWebRTC = (initialResolution: string) => {
       }
 
       if (callData.encryptionKey) {
-        // Retrieve the key, convert it from an array back to ArrayBuffer, and import it.
         const rawKey = new Uint8Array(callData.encryptionKey).buffer;
         encryptionKeyRef.current = await importKey(rawKey);
       } else {
@@ -497,7 +514,6 @@ export const useWebRTC = (initialResolution: string) => {
         pc.addIceCandidate(candidate);
       });
 
-      // Listen for subsequent offer changes (for ICE restarts)
       callDocRef.current.on('value', async (snapshot: any) => {
           const data = snapshot.val();
           if (!data) {
@@ -507,7 +523,6 @@ export const useWebRTC = (initialResolution: string) => {
               return;
           }
           
-          // Check for a new offer, indicating an ICE restart from the caller.
           if (data?.offer && data.offer.sdp !== initialOfferSdp) {
               console.log("Received a new offer for reconnection.");
               setCallState(CallState.RECONNECTING);
@@ -527,8 +542,6 @@ export const useWebRTC = (initialResolution: string) => {
 
       setCallState(CallState.CREATING_ANSWER);
     } else {
-        // Otherwise, the call ID is free, so we initiate a new call with this ID.
-        // This allows call IDs to be reused.
         console.log(`Call ID "${id}" is available. Initializing a new call.`);
         await initiateCall(id);
     }
@@ -553,9 +566,7 @@ export const useWebRTC = (initialResolution: string) => {
   }, []);
 
   useEffect(() => {
-    // Add a beforeunload listener to hang up the call
     const handleBeforeUnload = () => {
-      // We only clean up if we are in an active call state
       if (callState !== CallState.IDLE && callState !== CallState.ENDED) {
         hangUp();
       }
@@ -573,7 +584,6 @@ export const useWebRTC = (initialResolution: string) => {
     isMuted,
     isVideoOff,
     callState,
-    // FIX: Expose setCallState to allow parent component to manage state based on external events (e.g., Firebase listener).
     setCallState,
     errorMessage,
     callId,
@@ -593,5 +603,7 @@ export const useWebRTC = (initialResolution: string) => {
     toggleVideo,
     hangUp,
     reset,
+    setOnMessage,
+    sendMessage,
   };
 };

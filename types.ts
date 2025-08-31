@@ -46,3 +46,9 @@ export interface PeerStatus {
   isOnline: boolean;
   lastChanged: number;
 }
+
+export interface ChatMessage {
+  text: string;
+  sender: 'me' | 'peer';
+  timestamp: number;
+}
