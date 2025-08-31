@@ -42,3 +42,6 @@ coverage/
 
 # Miscellaneous
 *.log
+firebase.ts
+.gitignore.am
+firebase.ts.am
