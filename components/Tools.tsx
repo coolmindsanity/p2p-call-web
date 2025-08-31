@@ -6,6 +6,8 @@ import { CallHistoryEntry, PinnedEntry } from '../types';
 interface ToolsProps {
   userId: string | null;
   onRestore: (data: { history: CallHistoryEntry[], pinned: PinnedEntry[] }) => void;
+  canInstall: boolean;
+  onInstallClick: () => void;
 }
 
 const DownloadIcon: React.FC<{className?: string}> = ({className}) => (
@@ -39,7 +41,7 @@ const QuestionMarkCircleIcon: React.FC<{className?: string}> = ({className}) => 
 );
 
 
-const Tools: React.FC<ToolsProps> = ({ userId, onRestore }) => {
+const Tools: React.FC<ToolsProps> = ({ userId, onRestore, canInstall, onInstallClick }) => {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [feedbackText, setFeedbackText] = useState('');
@@ -178,6 +180,22 @@ const Tools: React.FC<ToolsProps> = ({ userId, onRestore }) => {
                     </button>
                 </div>
             </div>
+
+            {canInstall && (
+                <div className="p-6 bg-white/50 dark:bg-gray-800/50 rounded-lg shadow-sm">
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">Install to Device</h3>
+                    <p className="text-sm text-slate-600 dark:text-gray-400 mb-4">
+                        Add a shortcut to this app on your home screen for quick and easy access.
+                    </p>
+                    <button
+                        onClick={onInstallClick}
+                        className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold flex items-center justify-center gap-2 transition-transform transform hover:scale-105 text-white"
+                    >
+                        <DownloadIcon className="w-5 h-5" />
+                        Add to Home Screen
+                    </button>
+                </div>
+            )}
 
             <div className="p-6 bg-white/50 dark:bg-gray-800/50 rounded-lg shadow-sm">
                 <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">Backup Data</h3>

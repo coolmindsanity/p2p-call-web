@@ -163,6 +163,7 @@ const App: React.FC = () => {
     () => (localStorage.getItem('p2p-theme') as 'light' | 'dark') || 'dark'
   );
   const [lobbyAction, setLobbyAction] = useState<{type: 'start' | 'join' | 'ring', target?: PinnedEntry | string } | null>(null);
+  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
   
   const tabsRef = useRef<HTMLDivElement>(null);
   const currentCallInfoRef = useRef<{ callId: string, startTime: number, peerId?: string } | null>(null);
@@ -211,6 +212,19 @@ const App: React.FC = () => {
     setUserId(getUserId());
   }, []);
 
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+        e.preventDefault();
+        setInstallPromptEvent(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
   // Effect to listen for incoming calls
   useEffect(() => {
     if (!userId) return;
@@ -236,50 +250,57 @@ const App: React.FC = () => {
   useEffect(() => {
     const prevState = prevCallStateRef.current;
     
-    if (prevState === callState) return;
+    // This logic should only run on state transitions
+    if (prevState !== callState) {
+        // Stop any sounds from previous states
+        stopRingingSound();
 
-    // Stop any sounds from previous states
-    stopRingingSound();
+        switch (callState) {
+          case CallState.INCOMING_CALL:
+            playRingingSound();
+            break;
+          case CallState.CREATING_ANSWER:
+            playIncomingSound();
+            break;
+          case CallState.CONNECTED:
+            playConnectedSound();
+            if (callId && !currentCallInfoRef.current) {
+              currentCallInfoRef.current = { callId: callId, startTime: Date.now(), peerId: peerId || undefined };
+            }
+            break;
+          case CallState.ENDED:
+            playEndedSound();
+            if (currentCallInfoRef.current) {
+              const duration = Math.round((Date.now() - currentCallInfoRef.current.startTime) / 1000);
+              
+              if (duration > 3) { // Only save calls longer than 3 seconds
+                const newEntry: CallHistoryEntry = {
+                  callId: currentCallInfoRef.current.callId,
+                  timestamp: currentCallInfoRef.current.startTime,
+                  duration: duration,
+                  peerId: currentCallInfoRef.current.peerId,
+                  alias: pinned.find(p => p.callId === currentCallInfoRef.current!.callId)?.alias,
+                };
+                
+                setHistory(prevHistory => {
+                  const updatedHistory = [newEntry, ...prevHistory.filter(h => h.callId !== newEntry.callId || h.timestamp !== newEntry.timestamp)];
+                  saveHistory(updatedHistory);
+                  return updatedHistory;
+                });
+              }
+            }
+            currentCallInfoRef.current = null;
+            break;
+        }
 
-    switch (callState) {
-      case CallState.INCOMING_CALL:
-        playRingingSound();
-        break;
-      case CallState.CREATING_ANSWER:
-        playIncomingSound();
-        break;
-      case CallState.CONNECTED:
-        playConnectedSound();
-        if (callId && !currentCallInfoRef.current) {
-          currentCallInfoRef.current = { callId: callId, startTime: Date.now(), peerId: peerId || undefined };
-        }
-        break;
-      case CallState.ENDED:
-        playEndedSound();
-        if (currentCallInfoRef.current) {
-          const duration = Math.round((Date.now() - currentCallInfoRef.current.startTime) / 1000);
-          
-          if (duration > 3) { // Only save calls longer than 3 seconds
-            const newEntry: CallHistoryEntry = {
-              callId: currentCallInfoRef.current.callId,
-              timestamp: currentCallInfoRef.current.startTime,
-              duration: duration,
-              peerId: currentCallInfoRef.current.peerId,
-              alias: pinned.find(p => p.callId === currentCallInfoRef.current!.callId)?.alias,
-            };
-            
-            setHistory(prevHistory => {
-              const updatedHistory = [newEntry, ...prevHistory.filter(h => h.callId !== newEntry.callId || h.timestamp !== newEntry.timestamp)];
-              saveHistory(updatedHistory);
-              return updatedHistory;
-            });
-          }
-        }
-        currentCallInfoRef.current = null;
-        break;
+        prevCallStateRef.current = callState;
+    }
+    
+    // This logic handles the case where peerId arrives after the connection is established.
+    if (callState === CallState.CONNECTED && currentCallInfoRef.current && peerId && !currentCallInfoRef.current.peerId) {
+        currentCallInfoRef.current.peerId = peerId;
     }
 
-    prevCallStateRef.current = callState;
   }, [callState, callId, pinned, peerId]);
 
   useEffect(() => {
@@ -415,6 +436,18 @@ const App: React.FC = () => {
       console.error("Failed to restore data:", error);
       alert("An error occurred during the restore process. Please check the console for details.");
     }
+  };
+
+  const handleInstallApp = async () => {
+      if (!installPromptEvent) return;
+      installPromptEvent.prompt();
+      const { outcome } = await installPromptEvent.userChoice;
+      if (outcome === 'accepted') {
+          console.log('User accepted the A2HS prompt');
+      } else {
+          console.log('User dismissed the A2HS prompt');
+      }
+      setInstallPromptEvent(null);
   };
 
   const handleAcceptCall = () => {
@@ -571,7 +604,12 @@ const App: React.FC = () => {
               />
             )}
              {activeTab === 'tools' && (
-              <Tools userId={userId} onRestore={handleRestore} />
+              <Tools
+                userId={userId}
+                onRestore={handleRestore}
+                canInstall={!!installPromptEvent}
+                onInstallClick={handleInstallApp}
+              />
             )}
             {activeTab === 'about' && (
               <About 
