@@ -217,6 +217,8 @@ const App: React.FC = () => {
     peerId,
     isE2EEActive,
     callStats,
+    resolution,
+    setResolution,
     enterLobby,
     startCall,
     joinCall,
@@ -228,7 +230,7 @@ const App: React.FC = () => {
     reset,
     // FIX: Destructure setCallState from the useWebRTC hook to manage call state transitions.
     setCallState,
-  } = useWebRTC();
+  } = useWebRTC(localStorage.getItem('p2p-resolution') || '720p');
 
   const [userId, setUserId] = useState<string | null>(null);
   const [joinCallId, setJoinCallId] = useState('');
@@ -260,7 +262,9 @@ const App: React.FC = () => {
   
   // Custom hooks for presence
   usePresence(userId);
+  // Get a list of peer IDs from the pinned contacts to monitor their online status.
   const peerIds = useMemo(() => pinned.map(p => p.peerId).filter(Boolean) as string[], [pinned]);
+  // Subscribe to the presence status of the pinned peers.
   const peerStatus = usePeerStatus(peerIds);
 
   useEffect(() => {
@@ -274,6 +278,10 @@ const App: React.FC = () => {
         });
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    localStorage.setItem('p2p-resolution', resolution);
+  }, [resolution]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -702,6 +710,7 @@ const App: React.FC = () => {
             {activeTab === 'pinned' && (
               <PinnedCalls 
                 pins={pinned}
+                // Pass the real-time presence status down to the PinnedCalls component.
                 peerStatus={peerStatus}
                 onCall={handleCall}
                 onUpdateAlias={handleUpdatePinnedAlias}
@@ -767,6 +776,8 @@ const App: React.FC = () => {
                 onToggleVideo={toggleVideo}
                 onConfirm={handleLobbyConfirm}
                 onCancel={handleReset}
+                resolution={resolution}
+                onResolutionChange={setResolution}
             />
         );
       case CallState.CONNECTED:
@@ -874,7 +885,7 @@ const App: React.FC = () => {
             <div
                 ref={remoteVideoContainerRef}
                 {...(isTouchDevice ? { onTouchStart, onTouchMove, onTouchEnd } : {})}
-                className="w-full h-full bg-black touch-none"
+                className="w-full h-auto max-w-7xl max-h-[85vh] aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border-2 border-slate-700/50 touch-none"
              >
               <VideoPlayer 
                 stream={remoteStream} 

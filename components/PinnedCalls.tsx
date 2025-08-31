@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PinnedEntry, PeerStatus } from '../types';
+import { formatTimeAgo } from '../utils/format';
 
 interface PinnedCallsProps {
   pins: PinnedEntry[];
@@ -81,7 +82,7 @@ const PinnedCalls: React.FC<PinnedCallsProps> = ({ pins, peerStatus, onCall, onU
   return (
     <div className="w-full max-w-sm space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar" role="list">
         {pins.map((pin, index) => {
-          const status = pin.peerId ? peerStatus[pin.peerId] : null;
+          const status = pin.peerId ? peerStatus[pin.peerId] : undefined;
           const isOnline = status?.isOnline === true;
           const canCallDirectly = !!pin.peerId;
           const isButtonDisabled = canCallDirectly && !isOnline;
@@ -129,15 +130,32 @@ const PinnedCalls: React.FC<PinnedCallsProps> = ({ pins, peerStatus, onCall, onU
                         {pin.alias || pin.callId}
                     </p>
                     {canCallDirectly ? (
-                        <div className="text-xs flex items-center gap-2 mt-1" title={isOnline ? `Online` : `Offline`}>
-                            <span className="relative flex h-2.5 w-2.5">
-                                {isOnline && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>}
-                                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`}></span>
-                            </span>
-                            <span className={`font-medium ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                                {isOnline ? 'Online' : 'Offline'}
-                            </span>
-                        </div>
+                      status ? (
+                          <div className="group relative text-xs flex items-center gap-2 mt-1 cursor-pointer" tabIndex={0} aria-label={isOnline ? 'User is online' : `User is offline. Last seen ${formatTimeAgo(status.lastChanged)}`}>
+                              <span className="relative flex h-2.5 w-2.5">
+                                  {isOnline && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>}
+                                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`}></span>
+                              </span>
+                              <span className={`font-medium ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                  {isOnline ? 'Online' : 'Offline'}
+                              </span>
+                              {!isOnline && (
+                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-3 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-lg opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity pointer-events-none z-10">
+                                      Last seen: {formatTimeAgo(status.lastChanged)}
+                                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
+                                  </div>
+                              )}
+                          </div>
+                      ) : (
+                          <div className="text-xs flex items-center gap-2 mt-1" title="Status unknown">
+                              <span className="relative flex h-2.5 w-2.5">
+                                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 bg-gray-400`}></span>
+                              </span>
+                              <span className="font-medium text-gray-400 dark:text-gray-500">
+                                  Unknown
+                              </span>
+                          </div>
+                      )
                     ) : (
                         <p className="text-xs text-slate-500 dark:text-gray-400 font-mono truncate mt-1" title={`Call ID: ${pin.callId}`}>
                             ID: {pin.callId}

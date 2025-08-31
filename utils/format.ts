@@ -23,3 +23,32 @@ export const formatDate = (timestamp: number): string => {
         minute: '2-digit'
     });
 }
+
+/**
+ * Converts a timestamp into a relative time string (e.g., "5 minutes ago").
+ * @param timestamp The timestamp in milliseconds.
+ * @returns A human-readable relative time string.
+ */
+export const formatTimeAgo = (timestamp: number): string => {
+    const now = new Date();
+    const past = new Date(timestamp);
+    const seconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+
+    if (seconds < 5) return "just now";
+    if (seconds < 60) return `${seconds} seconds ago`;
+
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days} day${days > 1 ? 's' : ''} ago`;
+
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months} month${months > 1 ? 's' : ''} ago`;
+
+    const years = Math.floor(days / 365);
+    return `${years} year${years > 1 ? 's' : ''} ago`;
+};

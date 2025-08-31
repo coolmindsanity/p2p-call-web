@@ -1,11 +1,14 @@
 import React, { useRef, useEffect } from 'react';
 import VideoPlayer from './VideoPlayer';
 import { usePinchToZoom } from '../hooks/usePinchToZoom';
+import ResolutionSelector from './ResolutionSelector';
 
 interface LobbyProps {
   localStream: MediaStream | null;
   isMuted: boolean;
   isVideoOff: boolean;
+  resolution: string;
+  onResolutionChange: (resolution: string) => void;
   onToggleMute: () => void;
   onToggleVideo: () => void;
   onConfirm: () => void;
@@ -43,6 +46,8 @@ const Lobby: React.FC<LobbyProps> = ({
   localStream,
   isMuted,
   isVideoOff,
+  resolution,
+  onResolutionChange,
   onToggleMute,
   onToggleVideo,
   onConfirm,
@@ -219,6 +224,10 @@ const Lobby: React.FC<LobbyProps> = ({
                     </div>
                 )}
             </div>
+        </div>
+        
+        <div className="mb-6">
+            <ResolutionSelector resolution={resolution} onResolutionChange={onResolutionChange} />
         </div>
 
 

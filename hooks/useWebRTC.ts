@@ -1,4 +1,3 @@
-
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { STUN_SERVERS } from '../constants';
 import { CallState, CallStats, PinnedEntry } from '../types';
@@ -10,7 +9,13 @@ import { generateKey, importKey, setupE2EE } from '../utils/crypto';
 const MAX_RECONNECTION_ATTEMPTS = 3;
 const RING_TIMEOUT_MS = 30000; // 30 seconds
 
-export const useWebRTC = () => {
+const RESOLUTION_CONSTRAINTS = {
+  '1080p': { width: { ideal: 1920 }, height: { ideal: 1080 } },
+  '720p': { width: { ideal: 1280 }, height: { ideal: 720 } },
+  '480p': { width: { ideal: 854 }, height: { ideal: 480 } },
+};
+
+export const useWebRTC = (initialResolution: string) => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
@@ -22,6 +27,7 @@ export const useWebRTC = () => {
   const [peerId, setPeerId] = useState<string | null>(null);
   const [isE2EEActive, setIsE2EEActive] = useState(false);
   const [callStats, setCallStats] = useState<CallStats | null>(null);
+  const [resolution, setResolution] = useState<string>(initialResolution);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -124,10 +130,18 @@ export const useWebRTC = () => {
     setCallState(CallState.IDLE);
   }, [cleanUp]);
 
-  const initMedia = useCallback(async () => {
+  const initMedia = useCallback(async (res: string) => {
     try {
+      // If there's an existing stream, stop all its tracks to release the camera.
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      
       setErrorMessage(null);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      
+      const videoConstraints = RESOLUTION_CONSTRAINTS[res as keyof typeof RESOLUTION_CONSTRAINTS] || RESOLUTION_CONSTRAINTS['720p'];
+      const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: true });
+
       // Set initial mute/video state from component state, in case it was toggled in the lobby
       stream.getAudioTracks().forEach(t => t.enabled = !isMuted);
       stream.getVideoTracks().forEach(t => t.enabled = !isVideoOff);
@@ -141,6 +155,8 @@ export const useWebRTC = () => {
               message = 'Permission denied. Please allow this site to access your camera and microphone in your browser settings.';
           } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
               message = 'No camera or microphone found. Please ensure your devices are connected and enabled.';
+          } else if (error.name === 'OverconstrainedError') {
+              message = `The selected resolution (${res}) is not supported by your device. Try a lower quality.`;
           }
       }
       setErrorMessage(message);
@@ -149,12 +165,20 @@ export const useWebRTC = () => {
     }
   }, [isMuted, isVideoOff]);
   
+  useEffect(() => {
+    // If we are in the lobby and the resolution changes, re-initialize the media stream
+    // to reflect the new quality setting in the preview.
+    if (callState === CallState.LOBBY) {
+        initMedia(resolution);
+    }
+  }, [resolution, callState, initMedia]);
+
   const enterLobby = useCallback(async () => {
-    const stream = await initMedia();
+    const stream = await initMedia(resolution);
     if(stream) {
         setCallState(CallState.LOBBY);
     }
-  }, [initMedia]);
+  }, [initMedia, resolution]);
 
   const restartIce = useCallback(async () => {
       const pc = peerConnectionRef.current;
@@ -529,6 +553,8 @@ export const useWebRTC = () => {
     peerId,
     isE2EEActive,
     callStats,
+    resolution,
+    setResolution,
     enterLobby,
     startCall,
     joinCall,
