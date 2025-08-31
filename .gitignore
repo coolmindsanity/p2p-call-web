@@ -45,3 +45,4 @@ coverage/
 firebase.ts
 .gitignore.am
 firebase.ts.am
+.armin/
