@@ -508,6 +508,8 @@ export const useWebRTC = () => {
     isMuted,
     isVideoOff,
     callState,
+    // FIX: Expose setCallState to allow parent component to manage state based on external events (e.g., Firebase listener).
+    setCallState,
     errorMessage,
     callId,
     peerId,
