@@ -17,17 +17,19 @@ import { getUserId } from './utils/user';
 import { db } from './firebase';
 import { formatTime } from './utils/format';
 import { useDraggable } from './hooks/useDraggable';
+import { usePinchToZoom } from './hooks/usePinchToZoom';
 
 const UnmuteIcon: React.FC<{className?: string}> = ({className}) => (
- <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-  <path strokeLinecap="round" strokeLinejoin="round" d="M11.998 4.5a7.5 7.5 0 0 1 7.5 7.5v3.665l-3.42-3.42a.75.75 0 0 0-1.06 1.06l4.243 4.242-1.06 1.06-4.243-4.242a.75.75 0 0 0-1.06 1.06l3.42 3.42V19.5a.75.75 0 0 1-1.5 0v-2.131A7.502 7.502 0 0 1 4.5 12.165v-3.665a7.5 7.5 0 0 1 7.498-7.5Z" />
-  <path strokeLinecap="round" strokeLinejoin="round" d="M3.53 3.53 20.47 20.47" />
+ <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M13.5 4.06c0-1.336-1.076-2.412-2.411-2.412A2.412 2.412 0 0 0 8.677 4.06v8.682a2.412 2.412 0 0 0 4.823 0V4.06Z" />
+    <path d="M6 10.5a.75.75 0 0 1 .75.75v.75a4.5 4.5 0 0 0 9 0v-.75a.75.75 0 0 1 1.5 0v.75a6 6 0 1 1-12 0v-.75a.75.75 0 0 1 .75-.75Z" />
+    <path fillRule="evenodd" d="M2.023 2.023a.75.75 0 0 1 1.06 0L21.977 20.92a.75.75 0 1 1-1.06 1.06L2.023 3.083a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
 </svg>
 );
 
 const VideoOffIcon: React.FC<{className?: string}> = ({className}) => (
- <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5 4.5 21.75m11.25-11.25 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9A2.25 2.25 0 0 0 4.5 18.75Z" />
+ <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M3.53 3.53a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 0 0 1.06-1.06l-18-18ZM20.25 11.625l1.58-1.58a1.5 1.5 0 0 0-1.06-2.56L18 8.935V7.5a3 3 0 0 0-3-3h-2.25l-1.822-1.823a.75.75 0 0 0-1.06 0l-.146.147-1.125 1.125a.75.75 0 0 0 0 1.06l.12.12L12 8.25V7.5h3v3.75l-4.28 4.28-.625.625a.75.75 0 0 0 0 1.06l.625.625 4.28 4.28V16.5h.75a3 3 0 0 0 3-3V11.625ZM4.5 19.5h8.25a3 3 0 0 0 3-3V13.125l-3.375-3.375L9 13.125v3.375h-3v-3.375l-.375-.375-1.5-1.5V16.5a3 3 0 0 0 3 3Z" />
 </svg>
 );
 
@@ -173,9 +175,12 @@ const App: React.FC = () => {
   
   const localVideoContainerRef = useRef<HTMLDivElement>(null);
   const controlsContainerRef = useRef<HTMLDivElement>(null);
+  const remoteVideoContainerRef = useRef<HTMLDivElement>(null);
 
   const { onPointerDown: onLocalVideoPointerDown } = useDraggable(localVideoContainerRef);
   const { onPointerDown: onControlsPointerDown } = useDraggable(controlsContainerRef);
+  const { zoom, setZoom, resetZoom, isPinching, onTouchStart, onTouchMove, onTouchEnd } = usePinchToZoom();
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   
   useEffect(() => {
     // When the active tab changes, calculate the new position for the indicator.
@@ -278,7 +283,9 @@ const App: React.FC = () => {
             }
             break;
           case CallState.ENDED:
-            playEndedSound();
+          case CallState.DECLINED:
+            if (callState === CallState.ENDED) playEndedSound();
+            resetZoom();
             if (currentCallInfoRef.current) {
               const duration = Math.round((Date.now() - currentCallInfoRef.current.startTime) / 1000);
               
@@ -310,7 +317,7 @@ const App: React.FC = () => {
         currentCallInfoRef.current.peerId = peerId;
     }
 
-  }, [callState, callId, pinned, peerId]);
+  }, [callState, callId, pinned, peerId, resetZoom]);
 
   useEffect(() => {
     if (callState === CallState.CONNECTED) {
@@ -396,6 +403,19 @@ const App: React.FC = () => {
     });
   };
 
+  const handleDeleteHistoryEntry = (timestamp: number) => {
+    // Confirm before deleting
+    if (!window.confirm("Are you sure you want to delete this call from your history? This action cannot be undone.")) {
+      return;
+    }
+
+    setHistory(prevHistory => {
+      const updatedHistory = prevHistory.filter(entry => entry.timestamp !== timestamp);
+      saveHistory(updatedHistory);
+      return updatedHistory;
+    });
+  };
+
   const handleTogglePin = useCallback((entry: CallHistoryEntry | PinnedEntry) => {
     setPinned(prevPinned => {
       const isPinned = prevPinned.some(p => p.callId === entry.callId);
@@ -469,14 +489,7 @@ const App: React.FC = () => {
   const handleDeclineCall = () => {
     if (incomingCall) {
         // We need to inform the caller that the call was declined.
-        // This is done by writing to the call document.
-        const callRef = db.ref(`calls/${incomingCall.callId}`);
-        callRef.update({ declined: true });
-
-        // Clean up the incoming call notification for this user.
-        const myIncomingCallRef = db.ref(`users/${userId}/incomingCall`);
-        myIncomingCallRef.remove();
-
+        declineCall(incomingCall.callId);
         setIncomingCall(null);
     }
   };
@@ -602,6 +615,7 @@ const App: React.FC = () => {
                 onUpdateAlias={handleUpdateHistoryAlias}
                 onTogglePin={handleTogglePin}
                 pinnedIds={pinnedIds}
+                onDelete={handleDeleteHistoryEntry}
               />
             )}
             {activeTab === 'pinned' && (
@@ -698,7 +712,41 @@ const App: React.FC = () => {
         }
         
         return (
-          <div className="relative w-full h-full flex flex-col items-center justify-center">
+          <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
+             <style>{`
+                /* Custom styles for vertical range input */
+                .zoom-slider-vertical {
+                  -webkit-appearance: none;
+                  appearance: none;
+                  width: 160px; /* This becomes the height because of rotation */
+                  height: 4px;
+                  background: rgba(255, 255, 255, 0.3);
+                  border-radius: 2px;
+                  outline: none;
+                  transform: rotate(-90deg);
+                  transform-origin: 80px 80px; /* center of the 'width' */
+                  cursor: ns-resize;
+                }
+                 .dark .zoom-slider-vertical {
+                    background: rgba(0, 0, 0, 0.4);
+                 }
+                .zoom-slider-vertical::-webkit-slider-thumb {
+                  -webkit-appearance: none;
+                  appearance: none;
+                  width: 20px;
+                  height: 20px;
+                  background: white;
+                  border: 2px solid #6366f1; /* indigo-500 */
+                  border-radius: 50%;
+                }
+                .zoom-slider-vertical::-moz-range-thumb {
+                  width: 18px;
+                  height: 18px;
+                  background: white;
+                  border: 2px solid #6366f1;
+                  border-radius: 50%;
+                }
+            `}</style>
             {callState === CallState.RECONNECTING && (
                 <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-4 z-20" role="status">
                     <svg className="animate-spin h-10 w-10 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -719,13 +767,43 @@ const App: React.FC = () => {
                   </React.Fragment>
               ))}
             </div>
-            <div className="w-full h-full bg-black">
-              <VideoPlayer stream={remoteStream} muted={false} />
+             {zoom > 1.05 && (
+                <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs font-mono px-2 py-1 rounded-full pointer-events-none z-10" aria-live="polite">
+                    {zoom.toFixed(1)}x
+                </div>
+            )}
+            <div
+                ref={remoteVideoContainerRef}
+                {...(isTouchDevice ? { onTouchStart, onTouchMove, onTouchEnd } : {})}
+                className="w-full h-full bg-black touch-none"
+             >
+              <VideoPlayer 
+                stream={remoteStream} 
+                muted={false}
+                style={{
+                  transform: `scale(${zoom})`,
+                  transition: isPinching ? 'none' : 'transform 0.1s linear',
+                }}
+              />
             </div>
+            {!isTouchDevice && callState === CallState.CONNECTED && (
+                <div className="absolute top-1/2 -translate-y-1/2 right-4 h-64 flex items-center justify-center z-10">
+                <input
+                    type="range"
+                    min="1"
+                    max="4"
+                    step="0.1"
+                    value={zoom}
+                    onChange={(e) => setZoom(parseFloat(e.target.value))}
+                    className="zoom-slider-vertical"
+                    aria-label="Video zoom"
+                />
+                </div>
+            )}
             <div
               ref={localVideoContainerRef}
               onPointerDown={onLocalVideoPointerDown}
-              className="absolute bottom-24 md:bottom-6 right-6 w-32 h-48 md:w-48 md:h-64 rounded-lg overflow-hidden shadow-lg border-2 border-indigo-500 cursor-move touch-action-none"
+              className="absolute bottom-24 md:bottom-6 right-6 w-32 h-48 md:w-48 md:h-64 rounded-lg overflow-hidden shadow-lg border-2 border-indigo-500 cursor-move touch-none"
             >
               <div className="relative w-full h-full">
                 <VideoPlayer stream={localStream} muted={true} />

@@ -80,24 +80,27 @@ export const useWebRTC = () => {
   }, [cleanUp]);
 
   const declineCall = useCallback(async (incomingCallId: string, peerToRingId?: string) => {
-    // For the person declining the call, they just need to clean their state
-    if (!peerToRingId) {
-       cleanUp();
-       setCallState(CallState.IDLE);
-       return;
-    }
+      const myUserId = getUserId();
+      const callRef = db.ref(`calls/${incomingCallId}`);
+      
+      // If peerToRingId is provided, it means the CALLER is cancelling the ring.
+      if (peerToRingId) {
+          const calleeIncomingCallRef = db.ref(`users/${peerToRingId}/incomingCall`);
+          await calleeIncomingCallRef.remove();
+      } 
+      // Otherwise, the CALLEE is declining the call.
+      else {
+          const myIncomingCallRef = db.ref(`users/${myUserId}/incomingCall`);
+          await myIncomingCallRef.remove();
+      }
 
-    // The caller needs to clean up the ringing state for the callee
-    const calleeIncomingCallRef = db.ref(`users/${peerToRingId}/incomingCall`);
-    await calleeIncomingCallRef.remove();
-    
-    const callRef = db.ref(`calls/${incomingCallId}`);
-    await callRef.update({ declined: true });
-    
-    cleanUp(true); // Keep call doc for a moment so decline can be seen
-    setTimeout(() => db.ref(`calls/${incomingCallId}`).remove(), 2000);
-
-    setCallState(CallState.IDLE);
+      // Mark the call as declined so the other party is notified.
+      await callRef.update({ declined: true });
+      
+      // Clean up local state.
+      cleanUp(true); // Keep call doc briefly for the 'declined' flag to propagate.
+      setTimeout(() => callRef.remove(), 2000); // Remove call doc after a delay.
+      setCallState(CallState.IDLE);
   }, [cleanUp]);
   
   const reset = useCallback(() => {
@@ -316,7 +319,6 @@ export const useWebRTC = () => {
       if (data?.declined) {
           setCallState(CallState.DECLINED);
           cleanUp();
-          setTimeout(() => reset(), 2000); // Go to home screen after 2s
           return;
       }
 
@@ -339,7 +341,7 @@ export const useWebRTC = () => {
       setCallState(CallState.WAITING_FOR_ANSWER);
     }
     
-  }, [createPeerConnection, hangUp, callState, peerId, reset, cleanUp, localStream]);
+  }, [createPeerConnection, hangUp, callState, peerId, cleanUp, localStream]);
 
   const ringUser = useCallback(async (peer: PinnedEntry) => {
     if (!peer.peerId) {

@@ -89,7 +89,7 @@ const About: React.FC<AboutProps> = ({ isDevMode, onToggleDevMode, theme, onTogg
           className="w-full px-4 py-2 bg-slate-200 dark:bg-gray-700 hover:bg-slate-300 dark:hover:bg-gray-600 rounded-lg font-semibold text-sm text-slate-600 dark:text-gray-300 hover:text-slate-800 dark:hover:text-white transition-colors"
           aria-live="polite"
         >
-          {isDevMode ? 'Disable' : 'Enable'} Developer Mode
+          {isDevMode ? 'Disable' : 'Enable'} Techie Mode
         </button>
       </div>
     </div>
