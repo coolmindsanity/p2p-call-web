@@ -176,7 +176,7 @@ const CallQualityIndicator: React.FC<{ stats: CallStats }> = ({ stats }) => {
   );
 };
 
-const TechieStats: React.FC<{ stats: CallStats }> = ({ stats }) => {
+const TechieStats: React.FC<{ stats: CallStats; onClick: () => void }> = ({ stats, onClick }) => {
     const StatItem: React.FC<{ label: string; value: number | null; unit: string }> = ({ label, value, unit }) => (
         <div className="flex justify-between items-center text-xs">
           <span className="font-semibold text-slate-300">{label}:</span>
@@ -186,9 +186,11 @@ const TechieStats: React.FC<{ stats: CallStats }> = ({ stats }) => {
 
     return (
         <div 
-            className="absolute top-24 left-4 w-48 p-3 bg-black/60 backdrop-blur-sm border border-white/10 rounded-lg text-xs font-mono shadow-lg z-10 pointer-events-none animate-fade-in"
+            onClick={onClick}
+            className="absolute top-24 left-4 w-48 p-3 bg-black/60 backdrop-blur-sm border border-white/10 rounded-lg text-xs font-mono shadow-lg z-10 animate-fade-in cursor-pointer"
             aria-live="polite"
             role="status"
+            title="Click to hide for this call"
         >
           <h4 className="font-bold text-center text-white mb-2 border-b border-white/20 pb-1">Techie Stats</h4>
           <div className="space-y-1">
@@ -246,6 +248,7 @@ const App: React.FC = () => {
   );
   const [lobbyAction, setLobbyAction] = useState<{type: 'start' | 'join' | 'ring', target?: PinnedEntry | string } | null>(null);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const [showTechieStatsForCall, setShowTechieStatsForCall] = useState(true);
   
   const tabsRef = useRef<HTMLDivElement>(null);
   const currentCallInfoRef = useRef<{ callId: string, startTime: number, peerId?: string } | null>(null);
@@ -367,6 +370,7 @@ const App: React.FC = () => {
             break;
           case CallState.CONNECTED:
             playConnectedSound();
+            setShowTechieStatsForCall(true);
             if (callId && !currentCallInfoRef.current) {
               currentCallInfoRef.current = { callId: callId, startTime: Date.now(), peerId: peerId || undefined };
             }
@@ -424,6 +428,10 @@ const App: React.FC = () => {
     setJoinCallId('');
   };
 
+  const handleHideTechieStats = () => {
+    setShowTechieStatsForCall(false);
+  };
+
   const handleReset = () => {
     reset();
     setJoinCallId('');
@@ -433,6 +441,17 @@ const App: React.FC = () => {
   const handleEnterLobby = (action: 'start' | 'join' | 'ring', target?: PinnedEntry | string) => {
     setLobbyAction({ type: action, target });
     enterLobby();
+  };
+
+  const handleRetryFromError = () => {
+    // If a specific action (like ringing a contact) led to the media error,
+    // we need to re-initiate that same action upon retry to preserve the user's intent.
+    if (lobbyAction) {
+      handleEnterLobby(lobbyAction.type, lobbyAction.target);
+    } else {
+      // If there was no specific action, default to re-attempting a 'start call' flow.
+      handleEnterLobby('start');
+    }
   };
   
   const handleLobbyConfirm = () => {
@@ -469,583 +488,400 @@ const App: React.FC = () => {
         handleEnterLobby('join', pin.callId);
     }
   };
-  
-  const handleRejoin = (callId: string) => {
-    const formattedCallId = callId.trim().toLowerCase();
-    setJoinCallId(formattedCallId);
+
+  const handleRejoinFromHistory = (id: string) => {
+    setJoinCallId(id);
+    handleEnterLobby('join', id);
     setActiveTab('new');
-    handleEnterLobby('join', formattedCallId);
   };
 
   const handleUpdateHistoryAlias = (timestamp: number, alias: string) => {
-    setHistory(prevHistory => {
-      const updatedHistory = prevHistory.map(entry =>
-        entry.timestamp === timestamp ? { ...entry, alias: alias || undefined } : entry
-      );
-      saveHistory(updatedHistory);
-      // Also update the alias in the pinned list if it exists there
-      const entryToUpdate = updatedHistory.find(e => e.timestamp === timestamp);
-      if(entryToUpdate) {
-        handleUpdatePinnedAlias(entryToUpdate.callId, alias);
-      }
-      return updatedHistory;
-    });
+    const updatedHistory = history.map(h => 
+      h.timestamp === timestamp ? { ...h, alias } : h
+    );
+    setHistory(updatedHistory);
+    saveHistory(updatedHistory);
   };
 
-  const handleDeleteHistoryEntry = (timestamp: number) => {
-    // Confirm before deleting
-    if (!window.confirm("Are you sure you want to delete this call from your history? This action cannot be undone.")) {
-      return;
-    }
+  const handleDeleteFromHistory = (timestamp: number) => {
+    const updatedHistory = history.filter(h => h.timestamp !== timestamp);
+    setHistory(updatedHistory);
+    saveHistory(updatedHistory);
+  }
 
-    setHistory(prevHistory => {
-      const updatedHistory = prevHistory.filter(entry => entry.timestamp !== timestamp);
-      saveHistory(updatedHistory);
-      return updatedHistory;
-    });
-  };
-
-  const handleTogglePin = useCallback((entry: CallHistoryEntry | PinnedEntry) => {
+  const handleTogglePin = (entry: CallHistoryEntry) => {
     setPinned(prevPinned => {
       const isPinned = prevPinned.some(p => p.callId === entry.callId);
-      let updatedPinned: PinnedEntry[];
+      let updatedPins;
       if (isPinned) {
-        updatedPinned = prevPinned.filter(p => p.callId !== entry.callId);
+        updatedPins = prevPinned.filter(p => p.callId !== entry.callId);
       } else {
-        const newPin: PinnedEntry = { callId: entry.callId, alias: entry.alias, peerId: (entry as CallHistoryEntry).peerId };
-        updatedPinned = [...prevPinned, newPin].sort((a, b) => (a.alias || a.callId).localeCompare(b.alias || b.callId));
+        const newPin: PinnedEntry = {
+          callId: entry.callId,
+          alias: entry.alias,
+          peerId: entry.peerId,
+        };
+        updatedPins = [newPin, ...prevPinned];
       }
-      // Persist the updated list of pinned calls to localStorage.
-      savePinned(updatedPinned);
-      return updatedPinned;
-    });
-  }, []);
-
-  const handleUnpin = useCallback((callId: string) => {
-    handleTogglePin({ callId });
-  }, [handleTogglePin]);
-
-  const handleUpdatePinnedAlias = (callId: string, alias: string) => {
-    setPinned(prevPinned => {
-      const updatedPinned = prevPinned.map(p =>
-        p.callId === callId ? { ...p, alias: alias || undefined } : p
-      );
-      // Persist the alias change to localStorage.
-      savePinned(updatedPinned);
-      return updatedPinned;
-    });
-    // Also update history entries with the same ID
-    setHistory(prevHistory => {
-        const updatedHistory = prevHistory.map(entry => 
-            entry.callId === callId ? { ...entry, alias: alias || undefined } : entry
-        );
-        saveHistory(updatedHistory);
-        return updatedHistory;
+      savePinned(updatedPins);
+      return updatedPins;
     });
   };
-  
-  const handleRestore = (data: { history: CallHistoryEntry[], pinned: PinnedEntry[] }) => {
-    try {
-      saveHistory(data.history);
-      savePinned(data.pinned);
-      alert('Restore successful! The application will now reload to apply the changes.');
-      window.location.reload();
-    } catch (error) {
-      console.error("Failed to restore data:", error);
-      alert("An error occurred during the restore process. Please check the console for details.");
-    }
-  };
 
-  const handleInstallApp = async () => {
-      if (!installPromptEvent) return;
-      installPromptEvent.prompt();
-      const { outcome } = await installPromptEvent.userChoice;
-      if (outcome === 'accepted') {
-          console.log('User accepted the A2HS prompt');
-      } else {
-          console.log('User dismissed the A2HS prompt');
-      }
-      setInstallPromptEvent(null);
-  };
-
-  const handleAcceptCall = () => {
-    if (incomingCall) {
-        joinCall(incomingCall.callId);
-        setIncomingCall(null);
-    }
-  };
-
-  const handleDeclineCall = () => {
-    if (incomingCall) {
-        // We need to inform the caller that the call was declined.
-        declineCall(incomingCall.callId);
-        setIncomingCall(null);
-    }
-  };
-
-
-  const renderIdleContent = () => {
-    const sortedHistory = [...history].sort((a, b) => b.timestamp - a.timestamp);
-    const pinnedIds = new Set(pinned.map(p => p.callId));
-    
-    return (
-       <div className="flex flex-col items-center justify-center gap-6 w-full max-w-sm px-4">
-         <style>{`
-            .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-            .custom-scrollbar::-webkit-scrollbar-track { background: rgba(40, 43, 54, 0.5); border-radius: 3px; }
-            .custom-scrollbar::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 3px; }
-            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4338ca; }
-            
-            @keyframes fade-in-down {
-              from { opacity: 0; transform: translateY(-10px); }
-              to { opacity: 1; transform: translateY(0); }
-            }
-            .animate-fade-in-down { animation: fade-in-down 0.5s ease-out forwards; }
-
-            @keyframes pop {
-              0% { transform: scale(1); }
-              50% { transform: scale(1.4); }
-              100% { transform: scale(1); }
-            }
-            .animate-pop { animation: pop 0.3s ease-out; }
-
-            @keyframes fade-in {
-              from { opacity: 0; }
-              to { opacity: 1; }
-            }
-            .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
-          `}</style>
-        <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 dark:text-white">P2P Video Call</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-2">Secure, serverless video chat.</p>
-        </div>
-
-        <div className="w-full mt-4">
-          <div ref={tabsRef} className="relative flex border-b border-gray-200 dark:border-gray-700">
-             <button
-              data-tab-id="new"
-              onClick={() => setActiveTab('new')} 
-              className={`flex-1 py-2 text-center font-semibold transition-colors ${activeTab === 'new' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'}`}
-            >
-              New
-            </button>
-            <button 
-              data-tab-id="recent"
-              onClick={() => setActiveTab('recent')} 
-              className={`flex-1 py-2 text-center font-semibold transition-colors ${activeTab === 'recent' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'}`}
-            >
-              Recent
-            </button>
-            <button 
-              data-tab-id="pinned"
-              onClick={() => setActiveTab('pinned')}
-              className={`flex-1 py-2 text-center font-semibold transition-colors ${activeTab === 'pinned' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'}`}
-            >
-              Pinned
-            </button>
-            <button 
-              data-tab-id="tools"
-              onClick={() => setActiveTab('tools')}
-              className={`flex-1 py-2 text-center font-semibold transition-colors ${activeTab === 'tools' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'}`}
-            >
-              Tools
-            </button>
-            <button 
-              data-tab-id="about"
-              onClick={() => setActiveTab('about')}
-              className={`flex-1 py-2 text-center font-semibold transition-colors ${activeTab === 'about' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'}`}
-            >
-              About
-            </button>
-            <div
-                className="absolute bottom-[-1px] h-0.5 bg-indigo-500 dark:bg-indigo-400 rounded-full transition-all duration-300 ease-in-out"
-                style={indicatorStyle}
-            />
-          </div>
-          
-          <div className="mt-6 min-h-[700px]">
-            {activeTab === 'new' && (
-              <div className="w-full space-y-4 p-6 bg-white/50 dark:bg-gray-800/50 rounded-lg shadow-sm">
-                <div className="space-y-2">
-                   <label htmlFor="call-id-input" className="font-medium text-gray-700 dark:text-gray-300">Join a Call</label>
-                   <div className="flex gap-2">
-                      <input 
-                        id="call-id-input"
-                        value={joinCallId}
-                        onChange={(e) => setJoinCallId(e.target.value)}
-                        placeholder="Enter call ID..."
-                        className="flex-grow px-4 py-3 bg-slate-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-white"
-                        aria-label="Enter call ID to join"
-                      />
-                      <button 
-                        onClick={handleJoinCall} 
-                        disabled={!joinCallId.trim()}
-                        className="px-6 py-3 bg-teal-600 hover:bg-teal-700 dark:bg-gradient-to-r dark:from-teal-500 dark:to-teal-600 dark:hover:from-teal-600 dark:hover:to-teal-700 rounded-lg font-semibold text-white transition-all disabled:bg-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:text-gray-200 dark:disabled:text-gray-400 disabled:cursor-not-allowed"
-                        aria-label="Join Call"
-                      >
-                        Join
-                      </button>
-                   </div>
-                </div>
-                 <div className="flex items-center gap-4">
-                  <hr className="flex-grow border-gray-300 dark:border-gray-700" />
-                  <span className="text-gray-400 dark:text-gray-500 font-medium">OR</span>
-                  <hr className="flex-grow border-gray-300 dark:border-gray-700" />
-                </div>
-                 <button onClick={() => handleEnterLobby('start')} className="w-full px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-gradient-to-r dark:from-indigo-500 dark:to-indigo-600 dark:hover:from-indigo-600 dark:hover:to-indigo-700 rounded-lg font-semibold transition-transform transform hover:scale-105">
-                  Create a New Call
-                </button>
-              </div>
-            )}
-            {activeTab === 'recent' && (
-              <CallHistory 
-                history={sortedHistory} 
-                onRejoin={handleRejoin} 
-                onUpdateAlias={handleUpdateHistoryAlias}
-                onTogglePin={handleTogglePin}
-                pinnedIds={pinnedIds}
-                onDelete={handleDeleteHistoryEntry}
-              />
-            )}
-            {activeTab === 'pinned' && (
-              <PinnedCalls 
-                pins={pinned}
-                // Pass the real-time presence status down to the PinnedCalls component.
-                peerStatus={peerStatus}
-                onCall={handleCall}
-                onUpdateAlias={handleUpdatePinnedAlias}
-                onUnpin={handleUnpin}
-              />
-            )}
-             {activeTab === 'tools' && (
-              <Tools
-                userId={userId}
-                onRestore={handleRestore}
-                canInstall={!!installPromptEvent}
-                onInstallClick={handleInstallApp}
-              />
-            )}
-            {activeTab === 'about' && (
-              <About 
-                isDevMode={isDevMode} 
-                onToggleDevMode={() => setIsDevMode(p => !p)} 
-                theme={theme}
-                onToggleTheme={toggleTheme}
-              />
-            )}
-          </div>
-        </div>
-      </div>
+  const handleUpdatePinAlias = (callId: string, alias: string) => {
+    const updatedPins = pinned.map(p => 
+      p.callId === callId ? { ...p, alias } : p
     );
+    setPinned(updatedPins);
+    savePinned(updatedPins);
   };
 
-  const renderContent = () => {
-    if ((callState === CallState.CREATING_OFFER || callState === CallState.JOINING) && !localStream) {
-      return (
-        <div className="flex flex-col items-center justify-center gap-4 text-center" role="status" aria-live="polite">
-          <svg className="animate-spin h-10 w-10 text-indigo-500 dark:text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <h2 className="text-2xl font-bold text-gray-700 dark:text-gray-200">Starting Call...</h2>
-          <p className="text-gray-500 dark:text-gray-400 max-w-xs">Please allow camera and microphone access when prompted by your browser.</p>
-        </div>
-      );
-    }
+  const handleUnpin = (callId: string) => {
+    const updatedPins = pinned.filter(p => p.callId !== callId);
+    setPinned(updatedPins);
+    savePinned(updatedPins);
+  };
 
-    switch (callState) {
-      case CallState.INCOMING_CALL:
-          if (!incomingCall) return renderIdleContent();
-          const callerPin = pinned.find(p => p.peerId === incomingCall.from);
-          // Prioritize the alias you have set for them, then the alias they have set for themselves, then a fallback.
-          const callerDisplayName = callerPin?.alias || incomingCall.callerAlias || incomingCall.from.substring(0, 8) + '...';
+  const handleRestore = (data: { history: CallHistoryEntry[], pinned: PinnedEntry[] }) => {
+    setHistory(data.history);
+    setPinned(data.pinned);
+    saveHistory(data.history);
+    savePinned(data.pinned);
+    setActiveTab('new');
+  };
+
+  const handleInstallClick = () => {
+    installPromptEvent?.prompt();
+  };
+
+  const renderHome = () => (
+    <div className="relative isolate min-h-screen w-full flex flex-col items-center justify-center p-4 pt-16 md:pt-24 text-center overflow-hidden">
+        {/* Animated background */}
+        <div className="absolute inset-0 z-[-10] overflow-hidden">
+            <div className="absolute inset-0 bg-slate-50 dark:bg-gray-900 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:32px_32px]"></div>
+            <div className="absolute -bottom-1/4 -left-1/4 w-1/2 h-1/2 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 blur-3xl animate-pulse-slow-1"></div>
+            <div className="absolute -top-1/4 -right-1/4 w-1/2 h-1/2 rounded-full bg-teal-500/10 dark:bg-teal-500/20 blur-3xl animate-pulse-slow-2"></div>
+        </div>
+
+        <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white mb-4 animate-fade-in-down">
+            Simple, Secure Video Calls
+        </h1>
+        <p className="max-w-xl text-lg text-slate-600 dark:text-gray-300 mb-8 animate-fade-in-down" style={{animationDelay: '150ms'}}>
+            Connect directly with anyone, anywhere. No accounts, no tracking, just a private peer-to-peer connection.
+        </p>
+      
+        <div className="relative w-full max-w-lg mx-auto z-10 animate-fade-in" style={{animationDelay: '300ms'}}>
+            <div className="absolute inset-0.5 bg-gradient-to-r from-indigo-500 to-teal-500 rounded-xl blur-lg opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+            <div className="relative bg-white/70 dark:bg-gray-800/80 backdrop-blur-sm shadow-2xl rounded-xl p-6">
+                
+                <div ref={tabsRef} className="relative flex items-center justify-around mb-6 border-b border-slate-300 dark:border-gray-700">
+                    <button onClick={() => setActiveTab('new')} className="flex-1 py-3 text-sm font-semibold text-slate-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors z-10" data-tab-id="new">New Call</button>
+                    <button onClick={() => setActiveTab('recent')} className="flex-1 py-3 text-sm font-semibold text-slate-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors z-10" data-tab-id="recent">Recent</button>
+                    <button onClick={() => setActiveTab('pinned')} className="flex-1 py-3 text-sm font-semibold text-slate-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors z-10" data-tab-id="pinned">Pinned</button>
+                    <button onClick={() => setActiveTab('tools')} className="flex-1 py-3 text-sm font-semibold text-slate-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors z-10" data-tab-id="tools">Tools</button>
+                    <button onClick={() => setActiveTab('about')} className="flex-1 py-3 text-sm font-semibold text-slate-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors z-10" data-tab-id="about">About</button>
+                    <div className="absolute bottom-0 h-0.5 bg-indigo-500 transition-all duration-300 ease-out" style={indicatorStyle}></div>
+                </div>
+
+                <div className="min-h-[250px] flex items-center justify-center">
+                  {activeTab === 'new' && (
+                    <div className="w-full space-y-6">
+                      <button 
+                        onClick={() => handleEnterLobby('start')} 
+                        className="w-full px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-gradient-to-r dark:from-indigo-500 dark:to-indigo-600 dark:hover:from-indigo-600 dark:hover:to-indigo-700 rounded-lg font-semibold text-lg transition-transform transform hover:scale-105"
+                      >
+                        Start New Call
+                      </button>
+                      <div className="flex items-center text-slate-500 dark:text-gray-400">
+                        <span className="flex-grow border-t border-slate-300 dark:border-gray-600"></span>
+                        <span className="px-4 text-sm font-medium">OR</span>
+                        <span className="flex-grow border-t border-slate-300 dark:border-gray-600"></span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={joinCallId}
+                          onChange={(e) => setJoinCallId(e.target.value)}
+                          placeholder="Enter Call ID"
+                          className="flex-grow px-4 py-3 bg-slate-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <button 
+                          onClick={handleJoinCall}
+                          className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold transition-colors disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+                          disabled={!joinCallId.trim()}
+                        >
+                          Join Call
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {activeTab === 'recent' && (
+                    <CallHistory
+                      history={history}
+                      onRejoin={handleRejoinFromHistory}
+                      onUpdateAlias={handleUpdateHistoryAlias}
+                      onTogglePin={handleTogglePin}
+                      onDelete={handleDeleteFromHistory}
+                      pinnedIds={new Set(pinned.map(p => p.callId))}
+                    />
+                  )}
+                  {activeTab === 'pinned' && (
+                    <PinnedCalls
+                      pins={pinned}
+                      peerStatus={peerStatus}
+                      onCall={handleCall}
+                      onUpdateAlias={handleUpdatePinAlias}
+                      onUnpin={handleUnpin}
+                    />
+                  )}
+                  {activeTab === 'tools' && <Tools userId={userId} onRestore={handleRestore} canInstall={!!installPromptEvent} onInstallClick={handleInstallClick} />}
+                  {activeTab === 'about' && <About isDevMode={isDevMode} onToggleDevMode={() => setIsDevMode(!isDevMode)} theme={theme} onToggleTheme={toggleTheme} />}
+                </div>
+            </div>
+        </div>
+
+         <style>{`
+          @keyframes pulse-slow-1 {
+            0%, 100% { transform: scale(1); opacity: 0.1; }
+            50% { transform: scale(1.1); opacity: 0.15; }
+          }
+          @keyframes pulse-slow-2 {
+            0%, 100% { transform: scale(1); opacity: 0.1; }
+            50% { transform: scale(1.05); opacity: 0.12; }
+          }
+          .animate-pulse-slow-1 { animation: pulse-slow-1 8s infinite ease-in-out; }
+          .animate-pulse-slow-2 { animation: pulse-slow-2 10s infinite ease-in-out; }
           
-          return <IncomingCallScreen 
-            callInfo={incomingCall}
-            callerDisplayName={callerDisplayName} 
-            onAccept={handleAcceptCall} 
-            onDecline={handleDeclineCall} 
-           />;
-      case CallState.LOBBY:
-        return (
+          @keyframes fade-in-down {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .animate-fade-in-down {
+            animation: fade-in-down 0.5s ease-out forwards;
+          }
+
+          @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          .animate-fade-in {
+            animation: fade-in 0.6s ease-out forwards;
+          }
+          
+          .custom-scrollbar::-webkit-scrollbar {
+              width: 6px;
+          }
+          .custom-scrollbar::-webkit-scrollbar-track {
+              background: transparent;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb {
+              background-color: rgba(128, 128, 128, 0.4);
+              border-radius: 3px;
+          }
+          .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+              background-color: rgba(128, 128, 128, 0.5);
+          }
+          
+          .animate-pop {
+              animation: pop 0.4s ease-out;
+          }
+          @keyframes pop {
+              0% { transform: scale(0.5); }
+              50% { transform: scale(1.2); }
+              100% { transform: scale(1); }
+          }
+         `}</style>
+    </div>
+  );
+
+  const renderCallScreen = () => (
+    <div className="absolute inset-0 w-full h-full bg-slate-900" 
+      onTouchStart={onTouchStart} 
+      onTouchMove={onTouchMove} 
+      onTouchEnd={onTouchEnd}
+    >
+      <div 
+        ref={remoteVideoContainerRef}
+        className="w-full h-full relative"
+      >
+        <VideoPlayer
+          stream={remoteStream}
+          muted={false}
+          style={{
+            transform: `scale(${zoom})`,
+            transition: isPinching ? 'none' : 'transform 0.1s linear',
+          }}
+        />
+        {!remoteStream && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-400 mx-auto"></div>
+              <p className="mt-4 text-white">Waiting for peer to connect...</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="absolute top-4 left-4 right-4 flex justify-between items-center p-3 bg-black/50 backdrop-blur-sm rounded-xl z-10">
+          <div className="flex items-center gap-3">
+            <ConnectionStatusIndicator callState={callState} connectionState={connectionState} isE2EEActive={isE2EEActive} />
+            {callStats && <CallQualityIndicator stats={callStats} />}
+          </div>
+          <div className="font-mono text-white text-sm" aria-label="Call duration">
+            {formatTime(elapsedTime)}
+          </div>
+      </div>
+      
+      {isDevMode && callStats && showTechieStatsForCall && <TechieStats stats={callStats} onClick={handleHideTechieStats} />}
+
+      <div 
+        ref={localVideoContainerRef}
+        onPointerDown={isTouchDevice ? undefined : onLocalVideoPointerDown}
+        className="absolute top-24 right-4 w-32 h-48 md:w-48 md:h-64 rounded-xl overflow-hidden shadow-lg border-2 border-white/20 cursor-move touch-action-none"
+      >
+        <VideoPlayer stream={localStream} muted={true} />
+        {isMuted && (
+          <div className="absolute bottom-2 left-2 p-1.5 bg-red-600/80 rounded-full">
+            <UnmuteIcon className="w-4 h-4 text-white" />
+          </div>
+        )}
+        {isVideoOff && (
+            <div className="absolute inset-0 bg-slate-800 flex items-center justify-center">
+                <VideoOffIcon className="w-8 h-8 text-white" />
+            </div>
+        )}
+      </div>
+
+      <div ref={controlsContainerRef}>
+        <Controls 
+          onToggleMute={toggleMute} 
+          onToggleVideo={toggleVideo} 
+          onHangUp={handleHangUp}
+          isMuted={isMuted}
+          isVideoOff={isVideoOff}
+          onPointerDown={isTouchDevice ? undefined : onControlsPointerDown}
+        />
+      </div>
+    </div>
+  );
+  
+  const renderConnectingScreen = () => (
+    <div className="w-full h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900 p-4">
+      <ConnectionManager 
+        callState={callState} 
+        connectionState={connectionState} 
+        callId={callId}
+        peerId={peerId}
+        pinnedContacts={pinned}
+        onCancel={
+          callState === CallState.RINGING && peerId ? 
+          () => declineCall(callId!, peerId) : 
+          handleHangUp
+        }
+      />
+    </div>
+  );
+
+  const renderErrorScreen = () => (
+    <div className="w-full h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-gray-900 p-6 text-center">
+        <svg className="w-16 h-16 text-red-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+        </svg>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Camera & Microphone Issue</h2>
+        <div className="max-w-md mx-auto p-4 bg-slate-100 dark:bg-gray-800 rounded-lg text-sm text-slate-600 dark:text-gray-300 mb-6 font-mono">
+            {errorMessage}
+        </div>
+        
+        <div className="max-w-md mx-auto text-left space-y-3 text-slate-700 dark:text-gray-400 mb-8">
+            <h3 className="font-semibold text-lg text-slate-800 dark:text-white">Troubleshooting Steps:</h3>
+            <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>Make sure no other application (like Zoom or Teams) is using your camera.</li>
+                <li>Check your browser settings to ensure this site has permission to access your camera and microphone.</li>
+                <li>Verify your devices are properly connected and selected in your system settings.</li>
+                <li>Try a different web browser.</li>
+            </ul>
+        </div>
+
+        <div className="flex gap-4">
+            <button onClick={handleRetryFromError} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors">Retry Access</button>
+            <button onClick={handleReset} className="px-6 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-slate-800 dark:text-white rounded-lg font-semibold transition-colors">Back to Home</button>
+        </div>
+    </div>
+  );
+
+  const renderDeclinedScreen = () => (
+    <div className="w-full h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-gray-900 p-6 text-center">
+        <svg className="w-16 h-16 text-amber-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+        </svg>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Call Not Answered</h2>
+        <p className="text-slate-600 dark:text-gray-400 mb-8">The other person did not answer or declined your call.</p>
+        <button onClick={handleReset} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors">Back to Home</button>
+    </div>
+  );
+  
+  const renderEndedScreen = () => (
+    <div className="w-full h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-gray-900 p-6 text-center">
+        <svg className="w-16 h-16 text-teal-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+        </svg>
+
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Call Ended</h2>
+        <p className="text-slate-600 dark:text-gray-400 mb-8">You can now close this window.</p>
+        <button onClick={handleReset} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors">Start New Call</button>
+    </div>
+  );
+  
+  switch (callState) {
+    case CallState.IDLE:
+      return renderHome();
+    case CallState.LOBBY:
+      return (
+        <div className="w-full h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900 p-4">
             <Lobby
                 localStream={localStream}
                 isMuted={isMuted}
                 isVideoOff={isVideoOff}
+                resolution={resolution}
+                onResolutionChange={setResolution}
                 onToggleMute={toggleMute}
                 onToggleVideo={toggleVideo}
                 onConfirm={handleLobbyConfirm}
                 onCancel={handleReset}
-                resolution={resolution}
-                onResolutionChange={setResolution}
             />
-        );
-      case CallState.CONNECTED:
-      case CallState.RECONNECTING:
-        const topBarItems: React.ReactNode[] = [];
-        topBarItems.push(<ConnectionStatusIndicator key="status" callState={callState} connectionState={connectionState} isE2EEActive={isE2EEActive} />);
-        topBarItems.push(
-            <div key="timer" className="font-mono text-lg tracking-wider text-slate-800 dark:text-white" aria-live="off">
-                {formatTime(elapsedTime)}
-            </div>
-        );
-        const muteVideoStatus = [];
-        if (isMuted) {
-            muteVideoStatus.push(
-                <div key="mute" className="flex items-center gap-1.5 text-amber-600 dark:text-yellow-300 animate-pulse animate-fade-in" title="You are muted">
-                    <UnmuteIcon className="w-5 h-5" />
-                    <span className="font-semibold text-sm">Muted</span>
-                </div>
-            );
-        }
-        if (isVideoOff) {
-            muteVideoStatus.push(
-                <div key="video" className="flex items-center gap-1.5 text-amber-600 dark:text-yellow-300 animate-pulse animate-fade-in" title="Your video is off">
-                    <VideoOffIcon className="w-5 h-5" />
-                    <span className="font-semibold text-sm">Video Off</span>
-                </div>
-            );
-        }
-        if (muteVideoStatus.length > 0) {
-            topBarItems.push(<div key="mute-video-group" className="flex items-center gap-4">{muteVideoStatus}</div>);
-        }
-        if (callStats && callState === CallState.CONNECTED) {
-            topBarItems.push(<CallQualityIndicator key="quality-stats" stats={callStats} />);
-        }
-        
-        return (
-          <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
-             <style>{`
-                /* Custom styles for vertical range input */
-                .zoom-slider-vertical {
-                  -webkit-appearance: none;
-                  appearance: none;
-                  width: 160px; /* This becomes the height because of rotation */
-                  height: 4px;
-                  background: rgba(255, 255, 255, 0.3);
-                  border-radius: 2px;
-                  outline: none;
-                  transform: rotate(-90deg);
-                  transform-origin: 80px 80px; /* center of the 'width' */
-                  cursor: ns-resize;
-                }
-                 .dark .zoom-slider-vertical {
-                    background: rgba(0, 0, 0, 0.4);
-                 }
-                .zoom-slider-vertical::-webkit-slider-thumb {
-                  -webkit-appearance: none;
-                  appearance: none;
-                  width: 20px;
-                  height: 20px;
-                  background: white;
-                  border: 2px solid #6366f1; /* indigo-500 */
-                  border-radius: 50%;
-                }
-                .zoom-slider-vertical::-moz-range-thumb {
-                  width: 18px;
-                  height: 18px;
-                  background: white;
-                  border: 2px solid #6366f1;
-                  border-radius: 50%;
-                }
-                @keyframes fade-in {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                .animate-fade-in {
-                    animation: fade-in 0.3s ease-out forwards;
-                }
-            `}</style>
-            {isDevMode && callStats && <TechieStats stats={callStats} />}
-            {callState === CallState.RECONNECTING && (
-                <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-4 z-20" role="status">
-                    <svg className="animate-spin h-10 w-10 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <h2 className="text-2xl font-bold text-gray-200">Connection Lost</h2>
-                    <p className="text-gray-400">Attempting to reconnect...</p>
-                </div>
-            )}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center justify-center gap-x-3 bg-white/60 dark:bg-black/50 backdrop-blur-sm px-4 py-2 rounded-lg z-10 max-w-[90vw] flex-wrap border border-slate-300/80 dark:border-white/10 shadow-md" aria-live="polite">
-              {topBarItems.map((item, index) => (
-                  <React.Fragment key={index}>
-                      {item}
-                      {index < topBarItems.length - 1 && (
-                          <div className="h-5 border-l border-gray-400 dark:border-gray-600 hidden sm:block"></div>
-                      )}
-                  </React.Fragment>
-              ))}
-            </div>
-             {zoom > 1.05 && (
-                <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs font-mono px-2 py-1 rounded-full pointer-events-none z-10" aria-live="polite">
-                    {zoom.toFixed(1)}x
-                </div>
-            )}
-            <div
-                ref={remoteVideoContainerRef}
-                {...(isTouchDevice ? { onTouchStart, onTouchMove, onTouchEnd } : {})}
-                className="w-full h-auto max-w-7xl max-h-[85vh] aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border-2 border-slate-700/50 touch-none"
-             >
-              <VideoPlayer 
-                stream={remoteStream} 
-                muted={false}
-                style={{
-                  transform: `scale(${zoom})`,
-                  transition: isPinching ? 'none' : 'transform 0.1s linear',
-                }}
-              />
-            </div>
-            {!isTouchDevice && callState === CallState.CONNECTED && (
-                <div className="absolute top-1/2 -translate-y-1/2 right-4 h-64 flex items-center justify-center z-10">
-                <input
-                    type="range"
-                    min="1"
-                    max="4"
-                    step="0.1"
-                    value={zoom}
-                    onChange={(e) => setZoom(parseFloat(e.target.value))}
-                    className="zoom-slider-vertical"
-                    aria-label="Video zoom"
-                />
-                </div>
-            )}
-            <div
-              ref={localVideoContainerRef}
-              onPointerDown={onLocalVideoPointerDown}
-              className="absolute bottom-24 md:bottom-6 right-6 w-32 h-48 md:w-48 md:h-64 rounded-lg overflow-hidden shadow-lg border-2 border-indigo-500 cursor-move touch-none"
-            >
-              <div className="relative w-full h-full">
-                <VideoPlayer stream={localStream} muted={true} />
-                {(isMuted || isVideoOff) && (
-                  <div className="absolute top-2 left-2 flex items-center gap-1.5">
-                    {isMuted && (
-                      <div className="p-1.5 bg-black/60 backdrop-blur-sm rounded-full" title="You are muted" aria-label="You are muted">
-                        <UnmuteIcon className="w-4 h-4 text-white" />
-                      </div>
-                    )}
-                    {isVideoOff && (
-                      <div className="p-1.5 bg-black/60 backdrop-blur-sm rounded-full" title="Your video is off" aria-label="Your video is off">
-                        <VideoOffIcon className="w-4 h-4 text-white" />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-            <Controls
-              ref={controlsContainerRef}
-              onPointerDown={onControlsPointerDown}
-              onToggleMute={toggleMute}
-              onToggleVideo={toggleVideo}
-              onHangUp={handleHangUp}
-              isMuted={isMuted}
-              isVideoOff={isVideoOff}
+        </div>
+      );
+    case CallState.CREATING_OFFER:
+    case CallState.WAITING_FOR_ANSWER:
+    case CallState.RINGING:
+    case CallState.JOINING:
+    case CallState.CREATING_ANSWER:
+      return renderConnectingScreen();
+    case CallState.CONNECTED:
+    case CallState.RECONNECTING:
+      return renderCallScreen();
+    case CallState.ENDED:
+      return renderEndedScreen();
+    case CallState.DECLINED:
+      return renderDeclinedScreen();
+    case CallState.MEDIA_ERROR:
+      return renderErrorScreen();
+    case CallState.INCOMING_CALL:
+       if (incomingCall) {
+            const caller = pinned.find(p => p.peerId === incomingCall.from);
+            const callerDisplayName = caller?.alias || incomingCall.callerAlias || incomingCall.from.substring(0,8);
+            return <IncomingCallScreen 
+                callInfo={incomingCall} 
+                callerDisplayName={callerDisplayName}
+                onAccept={() => handleEnterLobby('join', incomingCall.callId)}
+                onDecline={() => declineCall(incomingCall.callId)}
             />
-          </div>
-        );
-      case CallState.IDLE:
-        return renderIdleContent();
-      case CallState.ENDED:
-        return (
-           <div className="flex flex-col items-center justify-center gap-6">
-            <h2 className="text-3xl font-bold text-center">Call Ended</h2>
-            <button onClick={handleReset} className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold text-white transition-transform transform hover:scale-105">
-              Back to Home
-            </button>
-          </div>
-        );
-       case CallState.DECLINED:
-        return (
-           <div className="flex flex-col items-center justify-center gap-6">
-            <h2 className="text-3xl font-bold text-center text-amber-500 dark:text-amber-400">Call Not Answered</h2>
-            <p className="text-gray-500 dark:text-gray-400">The other user did not answer or declined the call.</p>
-            <button onClick={handleReset} className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold text-white transition-transform transform hover:scale-105">
-              Back to Home
-            </button>
-          </div>
-        );
-      case CallState.MEDIA_ERROR:
-        return (
-            <div className="flex flex-col items-center justify-center gap-6 text-center p-4 max-w-lg mx-auto animate-fade-in">
-                <VideoOffIcon className="h-16 w-16 text-red-500" />
-                <div className="space-y-2">
-                    <h2 className="text-3xl font-bold text-red-600 dark:text-red-400">Camera & Microphone Issue</h2>
-                    <p className="text-base text-gray-600 dark:text-gray-300">We couldn't access your media devices.</p>
-                </div>
-                
-                {errorMessage && (
-                    <div className="w-full p-3 bg-red-100/50 dark:bg-red-900/20 border border-red-300 dark:border-red-700/50 rounded-lg text-sm text-red-700 dark:text-red-300 font-mono" role="alert">
-                        {errorMessage}
-                    </div>
-                )}
-                
-                <div className="text-left w-full space-y-3 p-4 bg-slate-100 dark:bg-gray-800 rounded-lg">
-                    <h3 className="font-semibold text-slate-800 dark:text-gray-200">Troubleshooting Steps:</h3>
-                    <ul className="list-disc list-inside space-y-2 text-sm text-slate-600 dark:text-gray-400">
-                        <li>Make sure you have granted permission for this site to use your camera and microphone.</li>
-                        <li>Check if another application (e.g., Zoom, Teams) is already using your camera.</li>
-                        <li>Ensure your devices are properly connected and not physically covered.</li>
-                        <li>Try selecting a different video quality from the lobby screen if you have issues.</li>
-                    </ul>
-                </div>
-
-                <div className="flex items-center gap-4 w-full mt-2">
-                    <button onClick={handleReset} className="flex-1 px-6 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-slate-800 dark:text-white rounded-lg font-semibold transition-colors">
-                    Back to Home
-                    </button>
-                    <button onClick={enterLobby} className="flex-1 px-8 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold text-white transition-transform transform hover:scale-105">
-                    Retry Access
-                    </button>
-                </div>
-            </div>
-        );
-      default:
-        return (
-          <div className="w-full max-w-4xl mx-auto p-4 flex flex-col gap-4">
-             <div className="flex flex-col md:flex-row gap-4">
-                <div className="w-full md:w-1/3 flex-shrink-0">
-                  <h2 className="text-xl font-semibold mb-2 text-center">Your Video</h2>
-                  <div className="relative aspect-video bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-700">
-                    <VideoPlayer stream={localStream} muted={true} />
-                     {(isMuted || isVideoOff) && (
-                      <div className="absolute top-2 left-2 flex items-center gap-2">
-                        {isMuted && (
-                          <div className="p-2 bg-black/60 backdrop-blur-sm rounded-full" title="You are muted" aria-label="You are muted">
-                            <UnmuteIcon className="w-5 h-5 text-white" />
-                          </div>
-                        )}
-                        {isVideoOff && (
-                          <div className="p-2 bg-black/60 backdrop-blur-sm rounded-full" title="Your video is off" aria-label="Your video is off">
-                            <VideoOffIcon className="w-5 h-5 text-white" />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <ConnectionManager 
-                  callState={callState}
-                  connectionState={connectionState}
-                  callId={callId}
-                  peerId={peerId}
-                  pinnedContacts={pinned}
-                  onCancel={() => callState === CallState.RINGING && callId && peerId ? declineCall(callId, peerId) : handleHangUp()}
-                />
-            </div>
-          </div>
-        );
-    }
-  };
-
-  return (
-    <main className="relative min-h-screen w-full flex items-center justify-center p-4 text-slate-800 dark:text-white overflow-hidden">
-      {renderContent()}
-      <div className="absolute bottom-4 left-4 text-xs text-gray-400 dark:text-gray-500 font-mono z-50">
-        State: {callState}
-      </div>
-    </main>
-  );
+       }
+       // If incomingCall is null (edge case), return to idle state
+       return renderHome();
+    default:
+      return renderHome();
+  }
 };
 
 export default App;
