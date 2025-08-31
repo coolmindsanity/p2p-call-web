@@ -967,16 +967,38 @@ const App: React.FC = () => {
         );
       case CallState.MEDIA_ERROR:
         return (
-           <div className="flex flex-col items-center justify-center gap-4 text-center p-4">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-             <h2 className="text-3xl font-bold text-red-600 dark:text-red-400">Device Access Error</h2>
-             <p className="text-gray-500 dark:text-gray-400 max-w-sm">{errorMessage || 'Could not access your camera or microphone.'}</p>
-             <button onClick={handleReset} className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold text-white transition-transform transform hover:scale-105">
-               Try Again
-             </button>
-           </div>
+            <div className="flex flex-col items-center justify-center gap-6 text-center p-4 max-w-lg mx-auto animate-fade-in">
+                <VideoOffIcon className="h-16 w-16 text-red-500" />
+                <div className="space-y-2">
+                    <h2 className="text-3xl font-bold text-red-600 dark:text-red-400">Camera & Microphone Issue</h2>
+                    <p className="text-base text-gray-600 dark:text-gray-300">We couldn't access your media devices.</p>
+                </div>
+                
+                {errorMessage && (
+                    <div className="w-full p-3 bg-red-100/50 dark:bg-red-900/20 border border-red-300 dark:border-red-700/50 rounded-lg text-sm text-red-700 dark:text-red-300 font-mono" role="alert">
+                        {errorMessage}
+                    </div>
+                )}
+                
+                <div className="text-left w-full space-y-3 p-4 bg-slate-100 dark:bg-gray-800 rounded-lg">
+                    <h3 className="font-semibold text-slate-800 dark:text-gray-200">Troubleshooting Steps:</h3>
+                    <ul className="list-disc list-inside space-y-2 text-sm text-slate-600 dark:text-gray-400">
+                        <li>Make sure you have granted permission for this site to use your camera and microphone.</li>
+                        <li>Check if another application (e.g., Zoom, Teams) is already using your camera.</li>
+                        <li>Ensure your devices are properly connected and not physically covered.</li>
+                        <li>Try selecting a different video quality from the lobby screen if you have issues.</li>
+                    </ul>
+                </div>
+
+                <div className="flex items-center gap-4 w-full mt-2">
+                    <button onClick={handleReset} className="flex-1 px-6 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-slate-800 dark:text-white rounded-lg font-semibold transition-colors">
+                    Back to Home
+                    </button>
+                    <button onClick={enterLobby} className="flex-1 px-8 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold text-white transition-transform transform hover:scale-105">
+                    Retry Access
+                    </button>
+                </div>
+            </div>
         );
       default:
         return (

@@ -214,6 +214,7 @@ export const useWebRTC = (initialResolution: string) => {
     pc.onconnectionstatechange = () => {
       if (pc) {
         setConnectionState(pc.connectionState);
+
         if (pc.connectionState === 'connected') {
           if (ringingTimeoutRef.current) clearTimeout(ringingTimeoutRef.current);
           reconnectionAttemptsRef.current = 0; // Reset attempts on successful connection
@@ -270,25 +271,28 @@ export const useWebRTC = (initialResolution: string) => {
                 setIsE2EEActive(true);
              }
           }
-        } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        } else if (pc.connectionState === 'failed') {
+          // The 'failed' state is terminal. We should end the call for both parties.
+          console.error("Peer connection failed. Hanging up.");
+          hangUp();
+        } else if (pc.connectionState === 'disconnected') {
+          // This state can be temporary. The caller will attempt to reconnect.
           setIsE2EEActive(false);
           setCallStats(null);
           if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
           lastStatsRef.current = null;
-          // Only schedule a reconnect if one isn't already pending. This prevents race conditions from multiple disconnection events.
+          
           if (isCallerRef.current && reconnectionAttemptsRef.current < MAX_RECONNECTION_ATTEMPTS && !reconnectionTimerRef.current) {
             reconnectionTimerRef.current = setTimeout(() => {
                 reconnectionAttemptsRef.current++;
                 console.log(`Connection lost. Attempting to reconnect... (Attempt ${reconnectionAttemptsRef.current})`);
                 setCallState(CallState.RECONNECTING);
                 
-                // Clear the timer ref *before* starting the attempt, allowing a new one to be scheduled if this one also fails.
                 reconnectionTimerRef.current = null;
                 
                 restartIce();
-            }, 2000 * reconnectionAttemptsRef.current); // Linear backoff: 0s, 2s, 4s...
+            }, 2000 * reconnectionAttemptsRef.current);
           } else if (reconnectionAttemptsRef.current >= MAX_RECONNECTION_ATTEMPTS && callState !== CallState.ENDED) {
-             // If we've exhausted retries and are not already in an ENDED state, hang up.
              console.log("Reconnection failed after maximum attempts.");
              hangUp();
           }
