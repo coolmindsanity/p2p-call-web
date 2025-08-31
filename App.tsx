@@ -93,40 +93,115 @@ const ConnectionStatusIndicator: React.FC<{ callState: CallState, connectionStat
     );
 };
 
-const DeveloperStats: React.FC<{ stats: CallStats | null, callState: CallState }> = ({ stats, callState }) => {
-  if (!stats) return null;
-
-  const getBitrateColor = (bitrate: number | null): string => {
-    if (bitrate === null) return 'text-gray-500 dark:text-gray-400';
-    if (bitrate > 500) return 'text-green-500 dark:text-green-400';
-    if (bitrate > 100) return 'text-yellow-500 dark:text-yellow-400';
-    return 'text-red-500 dark:text-red-400';
+const SignalBarsIcon: React.FC<{ level: 'good' | 'average' | 'poor' | 'unknown'; className?: string }> = ({ level, className }) => {
+  const levelMap = {
+    good: { bars: 4, color: 'text-green-500 dark:text-green-400' },
+    average: { bars: 3, color: 'text-yellow-500 dark:text-yellow-400' },
+    poor: { bars: 1, color: 'text-red-500 dark:text-red-400' },
+    unknown: { bars: 2, color: 'text-gray-400 dark:text-gray-500' },
   };
-  
-  const statItem = (label: string, value: number | null, unit: string, colorClass: string = 'text-gray-500 dark:text-gray-400') => (
-    <div className="flex items-center gap-1.5" title={label}>
-      <span className="font-semibold">{label}:</span>
-      <span className={colorClass}>{value !== null ? value : 'N/A'}{unit}</span>
-    </div>
-  );
-
-  const isConnected = callState === CallState.CONNECTED;
+  const { bars, color } = levelMap[level];
 
   return (
-    <div className="text-xs font-mono hidden md:flex items-center gap-x-3 text-gray-500 dark:text-gray-400 border-l border-gray-700 dark:border-gray-600 pl-3">
-      {isConnected && (
-        <>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={`${className} ${color}`}>
+      <path d="M21 4.25a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-1.5 0V5a.75.75 0 0 1 .75-.75Z" opacity={bars >= 4 ? 1 : 0.3} />
+      <path d="M16.5 7.25a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-1.5 0V8a.75.75 0 0 1 .75-.75Z" opacity={bars >= 3 ? 1 : 0.3} />
+      <path d="M12 10.25a.75.75 0 0 1 .75.75v7.5a.75.75 0 0 1-1.5 0v-7.5a.75.75 0 0 1 .75-.75Z" opacity={bars >= 2 ? 1 : 0.3} />
+      <path d="M7.5 13.25a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5a.75.75 0 0 1 .75-.75Z" opacity={bars >= 1 ? 1 : 0.3} />
+    </svg>
+  );
+};
+
+const CallQualityIndicator: React.FC<{ stats: CallStats }> = ({ stats }) => {
+  const getQualityLevel = (stats: CallStats): 'good' | 'average' | 'poor' | 'unknown' => {
+    if (stats.roundTripTime === null || stats.jitter === null) {
+      return 'unknown';
+    }
+
+    const rtt = stats.roundTripTime;
+    const jitter = stats.jitter;
+    let score = 0;
+
+    if (rtt < 150) score += 2;
+    else if (rtt < 400) score += 1;
+
+    if (jitter < 30) score += 2;
+    else if (jitter < 100) score += 1;
+    
+    if (stats.downloadBitrate !== null && stats.downloadBitrate < 100) score -= 1;
+    if (stats.uploadBitrate !== null && stats.uploadBitrate < 100) score -= 1;
+
+    if (score >= 4) return 'good';
+    if (score >= 2) return 'average';
+    return 'poor';
+  };
+  
+  const qualityLevel = getQualityLevel(stats);
+
+  const levelDetails = {
+    good: { text: 'Excellent', color: 'text-green-500 dark:text-green-400' },
+    average: { text: 'Good', color: 'text-yellow-500 dark:text-yellow-400' },
+    poor: { text: 'Poor', color: 'text-red-500 dark:text-red-400' },
+    unknown: { text: 'Unknown', color: 'text-gray-400 dark:text-gray-500' },
+  };
+
+  const { text, color } = levelDetails[qualityLevel];
+  
+  const statItem = (label: string, value: number | null, unit: string) => (
+    <div className="flex justify-between items-center text-xs">
+      <span className="font-semibold">{label}:</span>
+      <span>{value !== null ? `${value}${unit}` : 'N/A'}</span>
+    </div>
+  );
+  
+  return (
+    <div className="group relative flex items-center gap-2 text-sm text-slate-800 dark:text-white border-l border-gray-700 dark:border-gray-600 pl-3">
+      <SignalBarsIcon level={qualityLevel} className="w-5 h-5" />
+      <span className={`font-semibold hidden sm:block ${color}`}>{text}</span>
+      
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-lg text-xs text-slate-700 dark:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 font-mono shadow-lg">
+        <h4 className="font-bold text-center mb-2 border-b border-slate-200 dark:border-gray-700 pb-1">Connection Details</h4>
+        <div className="space-y-1">
           {statItem('RTT', stats.roundTripTime, 'ms')}
           {statItem('Jitter', stats.jitter, 'ms')}
-          {statItem('Loss', stats.packetsLost, '')}
-          <div className="h-4 border-l border-gray-600 dark:border-gray-700"></div>
-        </>
-      )}
-      {statItem('Up', stats.uploadBitrate, 'kbps', getBitrateColor(stats.uploadBitrate))}
-      {statItem('Down', stats.downloadBitrate, 'kbps', getBitrateColor(stats.downloadBitrate))}
+          {statItem('Packet Loss', stats.packetsLost, '')}
+          <div className="pt-1 mt-1 border-t border-slate-200 dark:border-gray-700"></div>
+          {statItem('Upload', stats.uploadBitrate, 'kbps')}
+          {statItem('Download', stats.downloadBitrate, 'kbps')}
+        </div>
+        <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-50 dark:bg-gray-900 border-r border-b border-slate-200 dark:border-gray-700 rotate-45"></div>
+      </div>
     </div>
   );
 };
+
+const TechieStats: React.FC<{ stats: CallStats }> = ({ stats }) => {
+    const StatItem: React.FC<{ label: string; value: number | null; unit: string }> = ({ label, value, unit }) => (
+        <div className="flex justify-between items-center text-xs">
+          <span className="font-semibold text-slate-300">{label}:</span>
+          <span className="text-white">{value !== null ? `${value}${unit}` : 'N/A'}</span>
+        </div>
+    );
+
+    return (
+        <div 
+            className="absolute top-24 left-4 w-48 p-3 bg-black/60 backdrop-blur-sm border border-white/10 rounded-lg text-xs font-mono shadow-lg z-10 pointer-events-none animate-fade-in"
+            aria-live="polite"
+            role="status"
+        >
+          <h4 className="font-bold text-center text-white mb-2 border-b border-white/20 pb-1">Techie Stats</h4>
+          <div className="space-y-1">
+            <StatItem label="RTT" value={stats.roundTripTime} unit="ms" />
+            <StatItem label="Jitter" value={stats.jitter} unit="ms" />
+            <StatItem label="Packet Loss" value={stats.packetsLost} unit="" />
+            <div className="pt-1 mt-1 border-t border-white/20"></div>
+            <StatItem label="Upload" value={stats.uploadBitrate} unit="kbps" />
+            <StatItem label="Download" value={stats.downloadBitrate} unit="kbps" />
+          </div>
+        </div>
+      );
+};
+
 
 const App: React.FC = () => {
   const {
@@ -707,8 +782,8 @@ const App: React.FC = () => {
         if (muteVideoStatus.length > 0) {
             topBarItems.push(<div key="mute-video-group" className="flex items-center gap-4">{muteVideoStatus}</div>);
         }
-        if (isDevMode && callStats) {
-            topBarItems.push(<DeveloperStats key="dev-stats" stats={callStats} callState={callState} />);
+        if (callStats && callState === CallState.CONNECTED) {
+            topBarItems.push(<CallQualityIndicator key="quality-stats" stats={callStats} />);
         }
         
         return (
@@ -746,7 +821,15 @@ const App: React.FC = () => {
                   border: 2px solid #6366f1;
                   border-radius: 50%;
                 }
+                @keyframes fade-in {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                .animate-fade-in {
+                    animation: fade-in 0.3s ease-out forwards;
+                }
             `}</style>
+            {isDevMode && callStats && <TechieStats stats={callStats} />}
             {callState === CallState.RECONNECTING && (
                 <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-4 z-20" role="status">
                     <svg className="animate-spin h-10 w-10 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
