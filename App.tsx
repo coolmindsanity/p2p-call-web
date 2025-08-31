@@ -418,59 +418,9 @@ const App: React.FC = () => {
         if (historyContact?.alias) return historyContact.alias;
         return incomingCall.callerAlias || incomingCall.from.substring(0, 8);
     }, [incomingCall, pinned, history]);
-
-
-    if (callState === CallState.MEDIA_ERROR) {
-        return <MediaErrorScreen errorMessage={errorMessage} onRetry={reset} />;
-    }
-
-    if (callState === CallState.LOBBY) {
-        return <Lobby localStream={localStream} isMuted={isMuted} isVideoOff={isVideoOff} onToggleMute={toggleMute} onToggleVideo={toggleVideo} onConfirm={handleLobbyConfirm} onCancel={handleLobbyCancel} resolution={resolution} onResolutionChange={setResolution} enableE2EE={enableE2EE} onEnableE2EEChange={setEnableE2EE} />;
-    }
-
-    if (callState === CallState.INCOMING_CALL && incomingCall) {
-        return <IncomingCallScreen callInfo={incomingCall} callerDisplayName={callerDisplayName} onAccept={() => enterLobby()} onDecline={handleDeclineCall} />;
-    }
-
+    
     const isConnecting = [CallState.CREATING_OFFER, CallState.WAITING_FOR_ANSWER, CallState.RINGING, CallState.JOINING, CallState.CREATING_ANSWER].includes(callState);
     const showMainPage = [CallState.IDLE, CallState.ENDED, CallState.DECLINED].includes(callState);
-
-    const renderMainContent = () => {
-        if (isConnecting) {
-            return (
-                <div className="absolute inset-0 bg-gray-950/90 backdrop-blur-md flex items-center justify-center z-20">
-                    <ConnectionManager callState={callState} connectionState={connectionState} callId={callId} peerId={peerId} pinnedContacts={pinned} onCancel={handleCancelConnecting} />
-                </div>
-            );
-        }
-
-        if (callState === CallState.CONNECTED || callState === CallState.RECONNECTING) {
-            return (
-                <div className="absolute inset-0 bg-black">
-                    <div ref={remoteVideoContainerRef} className="w-full h-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-                        <VideoPlayer ref={remoteVideoRef} stream={remoteStream} muted={false} style={{ transform: `scale(${zoom})`, transition: isPinching ? 'none' : 'transform 0.1s linear' }} />
-                    </div>
-                    <div className="absolute bottom-6 right-6 w-32 h-auto md:w-48 aspect-video rounded-lg overflow-hidden shadow-lg border-2 border-white/20">
-                        <VideoPlayer stream={localStream} muted={true} />
-                        {(isMuted || isVideoOff) && (
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center gap-2">
-                                {isMuted && <UnmuteIcon className="w-6 h-6 text-white" />}
-                                {isVideoOff && <VideoOffIcon className="w-6 h-6 text-white" />}
-                            </div>
-                        )}
-                    </div>
-                    <div className="absolute top-4 left-4 flex items-center gap-4 bg-black/50 backdrop-blur-md p-2 rounded-lg border border-white/10">
-                        <ConnectionStatusIndicator callState={callState} connectionState={connectionState} isE2EEActive={isE2EEActive} />
-                        {callStats && <CallQualityIndicator stats={callStats} />}
-                        <span className="font-mono text-white text-sm">{formatTime(callDuration)}</span>
-                    </div>
-                    <Controls ref={controlsRef} onPointerDown={onControlsPointerDown} onToggleMute={toggleMute} onToggleVideo={toggleVideo} onHangUp={handleHangUp} isMuted={isMuted} isVideoOff={isVideoOff} />
-                </div>
-            );
-        }
-
-        return null;
-    };
     
     const tabs: { id: 'new' | 'recent' | 'pinned' | 'tools' | 'about', label: string }[] = [
         { id: 'new', label: 'New Call' },
@@ -535,7 +485,7 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen text-slate-200">
-            {renderMainContent()}
+            {/* Main Page UI: Only rendered when in an idle state */}
             {showMainPage && (
                 <div className="relative container mx-auto px-4 py-8 md:py-16 flex flex-col items-center gap-10">
                     <div className="text-center">
@@ -568,6 +518,44 @@ const App: React.FC = () => {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Full-screen states that replace the main UI */}
+            {callState === CallState.MEDIA_ERROR && <MediaErrorScreen errorMessage={errorMessage} onRetry={reset} />}
+            {callState === CallState.INCOMING_CALL && incomingCall && <IncomingCallScreen callInfo={incomingCall} callerDisplayName={callerDisplayName} onAccept={() => enterLobby()} onDecline={handleDeclineCall} />}
+            {callState === CallState.LOBBY && (
+                <div className="w-full h-screen flex items-center justify-center p-4">
+                    <Lobby localStream={localStream} isMuted={isMuted} isVideoOff={isVideoOff} onToggleMute={toggleMute} onToggleVideo={toggleVideo} onConfirm={handleLobbyConfirm} onCancel={handleLobbyCancel} resolution={resolution} onResolutionChange={setResolution} enableE2EE={enableE2EE} onEnableE2EEChange={setEnableE2EE} />
+                </div>
+            )}
+
+            {/* Overlays for connecting and active call states */}
+            {isConnecting && (
+                <div className="absolute inset-0 bg-gray-950/90 backdrop-blur-md flex items-center justify-center z-20">
+                    <ConnectionManager callState={callState} connectionState={connectionState} callId={callId} peerId={peerId} pinnedContacts={pinned} onCancel={handleCancelConnecting} />
+                </div>
+            )}
+            {(callState === CallState.CONNECTED || callState === CallState.RECONNECTING) && (
+                <div className="absolute inset-0 bg-black">
+                    <div ref={remoteVideoContainerRef} className="w-full h-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+                        <VideoPlayer ref={remoteVideoRef} stream={remoteStream} muted={false} style={{ transform: `scale(${zoom})`, transition: isPinching ? 'none' : 'transform 0.1s linear' }} />
+                    </div>
+                    <div className="absolute bottom-6 right-6 w-32 h-auto md:w-48 aspect-video rounded-lg overflow-hidden shadow-lg border-2 border-white/20">
+                        <VideoPlayer stream={localStream} muted={true} />
+                        {(isMuted || isVideoOff) && (
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center gap-2">
+                                {isMuted && <UnmuteIcon className="w-6 h-6 text-white" />}
+                                {isVideoOff && <VideoOffIcon className="w-6 h-6 text-white" />}
+                            </div>
+                        )}
+                    </div>
+                    <div className="absolute top-4 left-4 flex items-center gap-4 bg-black/50 backdrop-blur-md p-2 rounded-lg border border-white/10">
+                        <ConnectionStatusIndicator callState={callState} connectionState={connectionState} isE2EEActive={isE2EEActive} />
+                        {callStats && <CallQualityIndicator stats={callStats} />}
+                        <span className="font-mono text-white text-sm">{formatTime(callDuration)}</span>
+                    </div>
+                    <Controls ref={controlsRef} onPointerDown={onControlsPointerDown} onToggleMute={toggleMute} onToggleVideo={toggleVideo} onHangUp={handleHangUp} isMuted={isMuted} isVideoOff={isVideoOff} />
                 </div>
             )}
         </div>
