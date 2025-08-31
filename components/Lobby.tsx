@@ -9,6 +9,8 @@ interface LobbyProps {
   isVideoOff: boolean;
   resolution: string;
   onResolutionChange: (resolution: string) => void;
+  enableE2EE: boolean;
+  onEnableE2EEChange: (enabled: boolean) => void;
   onToggleMute: () => void;
   onToggleVideo: () => void;
   onConfirm: () => void;
@@ -16,30 +18,37 @@ interface LobbyProps {
 }
 
 const MuteIcon: React.FC<{className?: string}> = ({className}) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M8.25 4.5a3.75 3.75 0 1 1 7.5 0v8.25a3.75 3.75 0 1 1-7.5 0V4.5Z" />
-    <path d="M6 10.5a.75.75 0 0 1 .75.75v.75a4.5 4.5 0 0 0 9 0v-.75a.75.75 0 0 1 1.5 0v.75a6 6 0 1 1-12 0v-.75a.75.75 0 0 1 .75-.75Z" />
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+    <line x1="12" x2="12" y1="19" y2="22"/>
   </svg>
 );
 
 const UnmuteIcon: React.FC<{className?: string}> = ({className}) => (
- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M13.5 4.06c0-1.336-1.076-2.412-2.411-2.412A2.412 2.412 0 0 0 8.677 4.06v8.682a2.412 2.412 0 0 0 4.823 0V4.06Z" />
-    <path d="M6 10.5a.75.75 0 0 1 .75.75v.75a4.5 4.5 0 0 0 9 0v-.75a.75.75 0 0 1 1.5 0v.75a6 6 0 1 1-12 0v-.75a.75.75 0 0 1 .75-.75Z" />
-    <path fillRule="evenodd" d="M2.023 2.023a.75.75 0 0 1 1.06 0L21.977 20.92a.75.75 0 1 1-1.06 1.06L2.023 3.083a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
-</svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="2" x2="22" y1="2" y2="22"/>
+    <path d="M18.89 13.23A7.12 7.12 0 0 1 19 12v-2"/>
+    <path d="M5 10v2a7 7 0 0 0 12 5"/>
+    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 .43 1.57"/>
+    <path d="M10.43 5.43A2.96 2.96 0 0 1 12 5a3 3 0 0 1 3 3v2.57"/>
+    <line x1="12" x2="12" y1="19" y2="22"/>
+  </svg>
 );
 
 const VideoOnIcon: React.FC<{className?: string}> = ({className}) => (
- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M4.5 4.5a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h8.25a3 3 0 0 0 3-3v-2.25l3.44 3.44a1.5 1.5 0 0 0 2.56-1.06V6.37a1.5 1.5 0 0 0-2.56-1.06L15.75 8.75V7.5a3 3 0 0 0-3-3H4.5Z" />
-</svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m22 8-6 4 6 4V8Z"/>
+    <rect width="14" height="12" x="2" y="6" rx="2" ry="2"/>
+  </svg>
 );
 
 const VideoOffIcon: React.FC<{className?: string}> = ({className}) => (
- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M3.53 3.53a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 0 0 1.06-1.06l-18-18ZM20.25 11.625l1.58-1.58a1.5 1.5 0 0 0-1.06-2.56L18 8.935V7.5a3 3 0 0 0-3-3h-2.25l-1.822-1.823a.75.75 0 0 0-1.06 0l-.146.147-1.125 1.125a.75.75 0 0 0 0 1.06l.12.12L12 8.25V7.5h3v3.75l-4.28 4.28-.625.625a.75.75 0 0 0 0 1.06l.625.625 4.28 4.28V16.5h.75a3 3 0 0 0 3-3V11.625ZM4.5 19.5h8.25a3 3 0 0 0 3-3V13.125l-3.375-3.375L9 13.125v3.375h-3v-3.375l-.375-.375-1.5-1.5V16.5a3 3 0 0 0 3 3Z" />
-</svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M16 16v-3.27a4 4 0 0 0-1.27-2.83L8 4H2v16h13.73"/>
+    <path d="m22 8-6 4 6 4V8Z"/>
+    <line x1="2" x2="22" y1="2" y2="22"/>
+  </svg>
 );
 
 const Lobby: React.FC<LobbyProps> = ({
@@ -48,6 +57,8 @@ const Lobby: React.FC<LobbyProps> = ({
   isVideoOff,
   resolution,
   onResolutionChange,
+  enableE2EE,
+  onEnableE2EEChange,
   onToggleMute,
   onToggleVideo,
   onConfirm,
@@ -223,8 +234,26 @@ const Lobby: React.FC<LobbyProps> = ({
             </div>
         </div>
         
-        <div className="mb-6">
+        <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 items-center justify-center mb-6">
             <ResolutionSelector resolution={resolution} onResolutionChange={onResolutionChange} />
+            <div className="flex items-center justify-center">
+                <label htmlFor="e2ee-toggle" className="flex items-center cursor-pointer select-none">
+                    <div className="relative">
+                        <input 
+                            type="checkbox" 
+                            id="e2ee-toggle" 
+                            className="sr-only peer" 
+                            checked={enableE2EE} 
+                            onChange={(e) => onEnableE2EEChange(e.target.checked)} 
+                        />
+                        <div className="w-14 h-8 bg-gray-600 rounded-full peer-checked:bg-indigo-600 transition-colors"></div>
+                        <div className="absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
+                    </div>
+                    <div className="ml-3 text-white font-medium">
+                        End-to-End Encryption
+                    </div>
+                </label>
+            </div>
         </div>
 
 

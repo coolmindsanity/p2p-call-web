@@ -137,7 +137,7 @@ const Tools: React.FC<ToolsProps> = ({ userId, onRestore, canInstall, onInstallC
     };
 
     return (
-        <div className="w-full max-w-sm space-y-8">
+        <div className="w-full max-w-lg space-y-8">
             <div className="p-6 bg-gray-800/50 rounded-lg border border-gray-700">
                 <div className="flex items-center gap-2 mb-2">
                     <h3 className="text-lg font-semibold text-gray-200">My User ID</h3>

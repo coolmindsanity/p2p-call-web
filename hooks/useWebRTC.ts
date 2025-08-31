@@ -28,6 +28,7 @@ export const useWebRTC = (initialResolution: string) => {
   const [isE2EEActive, setIsE2EEActive] = useState(false);
   const [callStats, setCallStats] = useState<CallStats | null>(null);
   const [resolution, setResolution] = useState<string>(initialResolution);
+  const [enableE2EE, setEnableE2EE] = useState(true);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -323,10 +324,6 @@ export const useWebRTC = (initialResolution: string) => {
     isCallerRef.current = true;
     reconnectionAttemptsRef.current = 0;
     
-    // Generate a new encryption key for this call.
-    const { key, rawKey } = await generateKey();
-    encryptionKeyRef.current = key;
-
     const pc = createPeerConnection(localStreamRef.current);
     setCallId(id);
 
@@ -347,8 +344,20 @@ export const useWebRTC = (initialResolution: string) => {
     };
 
     const callerId = getUserId();
-    const exportableKey = Array.from(new Uint8Array(rawKey));
-    await callDocRef.current.set({ offer, encryptionKey: exportableKey, callerId });
+    const callDataToSet: { [key: string]: any } = { offer, callerId };
+    
+    if (enableE2EE) {
+        // Generate a new encryption key for this call.
+        const { key, rawKey } = await generateKey();
+        encryptionKeyRef.current = key;
+        const exportableKey = Array.from(new Uint8Array(rawKey));
+        callDataToSet.encryptionKey = exportableKey;
+    } else {
+        encryptionKeyRef.current = null;
+        console.warn("Starting a call without End-to-End Encryption.");
+    }
+    
+    await callDocRef.current.set(callDataToSet);
 
     callDocRef.current.on('value', async (snapshot: any) => {
       const data = snapshot.val();
@@ -384,7 +393,7 @@ export const useWebRTC = (initialResolution: string) => {
       setCallState(CallState.WAITING_FOR_ANSWER);
     }
     
-  }, [createPeerConnection, hangUp, callState, peerId, cleanUp]);
+  }, [createPeerConnection, hangUp, callState, peerId, cleanUp, enableE2EE]);
 
   const ringUser = useCallback(async (peer: PinnedEntry) => {
     if (!peer.peerId) {
@@ -566,6 +575,8 @@ export const useWebRTC = (initialResolution: string) => {
     callStats,
     resolution,
     setResolution,
+    enableE2EE,
+    setEnableE2EE,
     enterLobby,
     startCall,
     joinCall,

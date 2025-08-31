@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
 import { CallState, CallHistoryEntry, PinnedEntry, CallStats, IncomingCall, PeerStatus } from './types';
@@ -12,6 +13,7 @@ import Tools from './components/Tools';
 import About from './components/About';
 import IncomingCallScreen from './components/IncomingCall';
 import Lobby from './components/Lobby';
+import MediaErrorScreen from './components/MediaErrorScreen';
 import { playIncomingSound, playConnectedSound, playEndedSound, playRingingSound, stopRingingSound } from './utils/sounds';
 import { getHistory, saveHistory } from './utils/history';
 import { getPinned, savePinned } from './utils/pins';
@@ -189,6 +191,7 @@ const App: React.FC = () => {
     const {
         localStream, remoteStream, connectionState, isMuted, isVideoOff, callState, setCallState,
         errorMessage, callId, peerId, isE2EEActive, callStats, resolution, setResolution,
+        enableE2EE, setEnableE2EE,
         enterLobby, startCall, joinCall, ringUser, declineCall, toggleMute, toggleVideo, hangUp, reset,
     } = useWebRTC('720p');
 
@@ -410,8 +413,12 @@ const App: React.FC = () => {
     }, [incomingCall, pinned, history]);
 
 
+    if (callState === CallState.MEDIA_ERROR) {
+        return <MediaErrorScreen errorMessage={errorMessage} onRetry={reset} />;
+    }
+
     if (callState === CallState.LOBBY) {
-        return <Lobby localStream={localStream} isMuted={isMuted} isVideoOff={isVideoOff} onToggleMute={toggleMute} onToggleVideo={toggleVideo} onConfirm={handleLobbyConfirm} onCancel={handleLobbyCancel} resolution={resolution} onResolutionChange={setResolution} />;
+        return <Lobby localStream={localStream} isMuted={isMuted} isVideoOff={isVideoOff} onToggleMute={toggleMute} onToggleVideo={toggleVideo} onConfirm={handleLobbyConfirm} onCancel={handleLobbyCancel} resolution={resolution} onResolutionChange={setResolution} enableE2EE={enableE2EE} onEnableE2EEChange={setEnableE2EE} />;
     }
 
     if (callState === CallState.INCOMING_CALL && incomingCall) {
