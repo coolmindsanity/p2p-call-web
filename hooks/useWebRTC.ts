@@ -485,7 +485,10 @@ export const useWebRTC = (initialResolution: string) => {
               }
               return;
           }
-          if (data?.offer && pc.remoteDescription?.sdp !== data.offer.sdp) {
+          // FIX: The original check `pc.remoteDescription?.sdp !== data.offer.sdp` could incorrectly
+          // trigger a reconnect if `pc.remoteDescription` was null when the listener first fired.
+          // This new condition is safer and correctly handles both the initial state and subsequent updates.
+          if (data?.offer && (!pc.remoteDescription || pc.remoteDescription.sdp !== data.offer.sdp)) {
               console.log("Received a new offer for reconnection.");
               setCallState(CallState.RECONNECTING);
               await pc.setRemoteDescription(new RTCSessionDescription(data.offer));

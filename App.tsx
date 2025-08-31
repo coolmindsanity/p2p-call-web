@@ -88,7 +88,7 @@ const ConnectionStatusIndicator: React.FC<{ callState: CallState, connectionStat
             {isE2EEActive && (
                 <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400 ml-1 border-l border-gray-300 dark:border-gray-600 pl-2">
                     <LockIcon className="w-4 h-4" />
-                    <span className="font-semibold text-sm hidden sm:block">Encrypted</span>
+                    <span className="font-semibold text-sm">Encrypted</span>
                 </div>
             )}
         </div>
