@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
 import { CallState, CallHistoryEntry, PinnedEntry, CallStats, IncomingCall, PeerStatus } from './types';
@@ -185,6 +186,7 @@ const App: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'new' | 'recent' | 'pinned' | 'tools' | 'about'>('new');
     const [joinInput, setJoinInput] = useState('');
     const [installPrompt, setInstallPrompt] = useState<any>(null);
+    const [peerToRing, setPeerToRing] = useState<PinnedEntry | null>(null);
 
     const {
         localStream, remoteStream, connectionState, isMuted, isVideoOff, callState, setCallState,
@@ -318,12 +320,13 @@ const App: React.FC = () => {
 
     const handleCallPinned = useCallback((pin: PinnedEntry) => {
         if (pin.peerId) {
-            ringUser(pin);
+            setPeerToRing(pin);
+            enterLobby();
         } else {
             setJoinInput(pin.callId);
             enterLobby();
         }
-    }, [ringUser, enterLobby]);
+    }, [enterLobby]);
 
     const handleAcceptCall = useCallback(() => {
         if (incomingCall) {
@@ -353,16 +356,20 @@ const App: React.FC = () => {
     }, [callState, callId, peerId, declineCall, reset]);
 
     const handleLobbyConfirm = useCallback(() => {
-        if(incomingCall) {
+        if (peerToRing) {
+            ringUser(peerToRing);
+            setPeerToRing(null);
+        } else if (incomingCall) {
             handleAcceptCall();
         } else if (joinInput) {
-            handleJoin(joinInput)
+            handleJoin(joinInput);
         } else {
             handleCreateCall();
         }
-    }, [incomingCall, joinInput, handleAcceptCall, handleJoin, handleCreateCall]);
+    }, [peerToRing, ringUser, incomingCall, joinInput, handleAcceptCall, handleJoin, handleCreateCall]);
 
     const handleLobbyCancel = useCallback(() => {
+        setPeerToRing(null);
         reset();
     }, [reset]);
 
