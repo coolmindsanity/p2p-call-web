@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
 import { CallState, CallHistoryEntry, PinnedEntry, CallStats, IncomingCall, PeerStatus } from './types';
@@ -87,9 +88,9 @@ const ConnectionStatusIndicator: React.FC<{ callState: CallState, connectionStat
             <span className={`w-3 h-3 rounded-full ${color} ${animate ? 'animate-pulse' : ''}`}></span>
             <span className="font-semibold hidden sm:block">{text}</span>
             {isE2EEActive && (
-                <div className="flex items-center gap-1.5 text-green-400 ml-1 border-l border-gray-600 pl-2">
-                    <LockIcon className="w-4 h-4" />
-                    <span className="font-semibold text-sm">Encrypted</span>
+                <div className="flex items-center gap-1 text-green-300 ml-2 bg-green-900/50 border border-green-700/60 px-2 py-0.5 rounded-full">
+                    <LockIcon className="w-3 h-3" />
+                    <span className="font-semibold text-xs">Encrypted</span>
                 </div>
             )}
         </div>
@@ -161,7 +162,7 @@ const CallQualityIndicator: React.FC<{ stats: CallStats }> = ({ stats }) => {
     <div className="group relative flex items-center gap-2 text-sm text-white border-l border-gray-600 pl-3" title={`Call Quality: ${text}`}>
       <SignalBarsIcon level={qualityLevel} className="w-5 h-5" />
       
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-gray-900/90 backdrop-blur-sm border border-gray-700 rounded-lg text-xs text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 font-mono shadow-lg">
+      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 p-3 bg-gray-900/90 backdrop-blur-sm border border-gray-700 rounded-lg text-xs text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 font-mono shadow-lg">
         <h4 className="font-bold text-center mb-2 border-b border-gray-700 pb-1 text-white">Connection Details</h4>
         <div className="space-y-1">
           {statItem('RTT', stats.roundTripTime, 'ms')}
@@ -171,7 +172,7 @@ const CallQualityIndicator: React.FC<{ stats: CallStats }> = ({ stats }) => {
           {statItem('Upload', stats.uploadBitrate, 'kbps')}
           {statItem('Download', stats.downloadBitrate, 'kbps')}
         </div>
-        <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 border-l border-b border-gray-700 rotate-45 transform -translate-y-1/2"></div>
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 border-t border-r border-gray-700 rotate-45 transform -translate-y-1/2"></div>
       </div>
     </div>
   );
@@ -181,7 +182,7 @@ const App: React.FC = () => {
     const [history, setHistory] = useState<CallHistoryEntry[]>(() => getHistory());
     const [pinned, setPinned] = useState<PinnedEntry[]>(() => getPinned());
     const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
-    const [activeTab, setActiveTab] = useState<'new' | 'recent' | 'pinned' | 'tools' | 'about'>('pinned');
+    const [activeTab, setActiveTab] = useState<'new' | 'recent' | 'pinned' | 'tools' | 'about'>('new');
     const [joinInput, setJoinInput] = useState('');
     const [installPrompt, setInstallPrompt] = useState<any>(null);
 
@@ -468,7 +469,20 @@ const App: React.FC = () => {
         switch(activeTab) {
             case 'new':
                 return (
-                    <div className="w-full max-w-lg mx-auto flex flex-col items-center gap-6 p-4">
+                    <div className="w-full max-w-lg mx-auto flex flex-col items-center gap-4 p-4">
+                        <button
+                            onClick={() => enterLobby()}
+                            className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-transform transform hover:scale-105 shadow-lg"
+                        >
+                            Start a New Call
+                        </button>
+                        
+                        <div className="w-full flex items-center">
+                            <div className="flex-grow border-t border-gray-700"></div>
+                            <span className="flex-shrink mx-4 text-gray-500 text-sm font-semibold">OR</span>
+                            <div className="flex-grow border-t border-gray-700"></div>
+                        </div>
+
                         <div className="w-full flex flex-col sm:flex-row gap-3">
                             <input
                                 type="text"
@@ -484,15 +498,6 @@ const App: React.FC = () => {
                                 className="w-full sm:w-auto px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
                             >
                                 Join Call
-                            </button>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <span className="text-gray-400">or</span>
-                            <button
-                                onClick={() => enterLobby()}
-                                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-transform transform hover:scale-105 shadow-lg"
-                            >
-                                Start a New Call
                             </button>
                         </div>
                     </div>
@@ -513,12 +518,12 @@ const App: React.FC = () => {
             {renderMainContent()}
             <div className="relative container mx-auto px-4 py-8 md:py-16 flex flex-col items-center gap-10">
                 <div className="text-center">
-                    <h1 className="text-5xl md:text-6xl font-bold text-white">Simple, Secure Video Calls</h1>
+                    <h1 className="text-5xl md:text-6xl font-extrabold text-white">Simple, Secure Video Calls</h1>
                     <p className="text-gray-400 mt-2">Connect directly with anyone, anywhere. No accounts, no tracking, just a private peer-to-peer connection.</p>
                 </div>
                 
-                <div className="w-full max-w-2xl mt-4 relative glass-container-glow">
-                    <div className="relative bg-black/30 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden">
+                <div className="w-full max-w-2xl mt-8 relative glass-container-glow">
+                    <div className="relative bg-black/30 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden">
                         <div className="border-b border-gray-200/10 px-4 md:px-8">
                             <nav className="-mb-px flex space-x-6 justify-center" aria-label="Tabs">
                                 {tabs.map(tab => (
@@ -527,7 +532,7 @@ const App: React.FC = () => {
                                         onClick={() => setActiveTab(tab.id)}
                                         className={`${
                                             activeTab === tab.id
-                                            ? 'border-indigo-400 text-indigo-400'
+                                            ? 'border-indigo-400 text-slate-100'
                                             : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
                                         } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors focus:outline-none`}
                                         aria-current={activeTab === tab.id ? 'page' : undefined}

@@ -67,13 +67,15 @@
         z-index: -1;
         top: 50%;
         left: 50%;
-        width: 125%;
-        height: 125%;
+        width: 150%;
+        height: 150%;
         transform: translate(-50%, -50%);
         border-radius: inherit;
-        background: radial-gradient(circle at 75% 25%, rgba(16, 185, 129, 0.5) 0%, rgba(56, 189, 248, 0.35) 25%, transparent 60%);
-        filter: blur(80px);
-        opacity: 1;
+        background: 
+          radial-gradient(circle at 15% 50%, rgba(168, 85, 247, 0.5) 0%, transparent 50%), /* Purple glow on the left */
+          radial-gradient(circle at 85% 50%, rgba(16, 185, 129, 0.5) 0%, transparent 50%); /* Green glow on the right */
+        filter: blur(120px);
+        opacity: 0.9;
       }
     </style>
   <script type="importmap">

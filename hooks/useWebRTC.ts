@@ -435,6 +435,8 @@ export const useWebRTC = (initialResolution: string) => {
       }
       setCallState(CallState.JOINING);
 
+      const initialOfferSdp = callData.offer.sdp;
+
       if (callData.callerId) {
         setPeerId(callData.callerId);
       }
@@ -489,14 +491,8 @@ export const useWebRTC = (initialResolution: string) => {
               return;
           }
           
-          if (data?.offer && (!pc.remoteDescription || pc.remoteDescription.sdp !== data.offer.sdp)) {
-              // FIX: Only process subsequent offers for reconnection, not the initial one.
-              // The `hasConnectedOnceRef` flag is set only when the connection state first becomes 'connected',
-              // preventing this listener from incorrectly triggering a reconnect on the initial join.
-              if (!hasConnectedOnceRef.current) {
-                  return;
-              }
-
+          // Check for a new offer, indicating an ICE restart from the caller.
+          if (data?.offer && data.offer.sdp !== initialOfferSdp) {
               console.log("Received a new offer for reconnection.");
               setCallState(CallState.RECONNECTING);
               await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
