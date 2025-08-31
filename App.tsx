@@ -228,8 +228,13 @@ const App: React.FC = () => {
         const listener = (snapshot: any) => {
             const call = snapshot.val();
             if (call) {
-                setIncomingCall(call);
-                setCallState(CallState.INCOMING_CALL);
+                // Only set to INCOMING_CALL if we are in an idle state.
+                // This prevents the UI from flashing back to the incoming call screen
+                // after the user has already clicked "Accept" and is moving to the lobby.
+                if ([CallState.IDLE, CallState.ENDED, CallState.DECLINED].includes(callState)) {
+                    setIncomingCall(call);
+                    setCallState(CallState.INCOMING_CALL);
+                }
             } else {
                 setIncomingCall(null);
                 if (callState === CallState.INCOMING_CALL) {
