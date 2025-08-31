@@ -148,6 +148,8 @@ const App: React.FC = () => {
     toggleVideo,
     hangUp,
     reset,
+    // FIX: Destructure setCallState from the useWebRTC hook to manage call state transitions.
+    setCallState,
   } = useWebRTC();
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -233,10 +235,17 @@ const App: React.FC = () => {
     
     const listener = (snapshot: any) => {
       const callData = snapshot.val();
+      
+      // A new call is coming in, and we are idle and able to receive it.
       if (callData && callState === CallState.IDLE) {
         setIncomingCall(callData);
-      } else {
+        setCallState(CallState.INCOMING_CALL);
+      } 
+      // The incoming call was cancelled (by caller or by declining) while we were in the INCOMING_CALL state.
+      else if (!callData && callState === CallState.INCOMING_CALL) {
         setIncomingCall(null);
+        setCallState(CallState.IDLE);
+        stopRingingSound();
       }
     };
 
@@ -245,7 +254,7 @@ const App: React.FC = () => {
     return () => {
       incomingCallRef.off('value', listener);
     };
-  }, [userId, callState]);
+  }, [userId, callState, setCallState]);
 
   useEffect(() => {
     const prevState = prevCallStateRef.current;
