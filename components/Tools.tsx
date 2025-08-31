@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { getHistory } from '../utils/history';
 import { getPinned } from '../utils/pins';
 import { CallHistoryEntry, PinnedEntry } from '../types';
+import { getUserDisplayName, saveUserDisplayName } from '../utils/user';
 
 interface ToolsProps {
   userId: string | null;
@@ -48,6 +49,8 @@ const Tools: React.FC<ToolsProps> = ({ userId, onRestore, canInstall, onInstallC
     const [feedbackSent, setFeedbackSent] = useState(false);
     const [idCopied, setIdCopied] = useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const [displayName, setDisplayName] = useState(() => getUserDisplayName() || '');
+    const [displayNameSaved, setDisplayNameSaved] = useState(false);
 
     const handleBackup = () => {
         try {
@@ -135,6 +138,16 @@ const Tools: React.FC<ToolsProps> = ({ userId, onRestore, canInstall, onInstallC
             setTimeout(() => setIdCopied(false), 2000);
         });
     };
+    
+    const handleDisplayNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setDisplayName(e.target.value);
+    };
+
+    const handleSaveDisplayName = () => {
+        saveUserDisplayName(displayName);
+        setDisplayNameSaved(true);
+        setTimeout(() => setDisplayNameSaved(false), 2000);
+    };
 
     return (
         <div className="w-full max-w-lg space-y-8">
@@ -176,6 +189,42 @@ const Tools: React.FC<ToolsProps> = ({ userId, onRestore, canInstall, onInstallC
                         </>
                         ) : (
                         'Copy ID'
+                        )}
+                    </button>
+                </div>
+            </div>
+            
+            <div className="p-6 bg-gray-800/50 rounded-lg border border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-200 mb-2">My Display Name</h3>
+                <p className="text-sm text-gray-400 mb-4">
+                    Set a name that others will see when you call them for the first time.
+                </p>
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={displayName}
+                        onChange={handleDisplayNameChange}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveDisplayName()}
+                        placeholder="Enter your name"
+                        className="flex-grow px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        aria-label="Your Display Name"
+                    />
+                     <button
+                        onClick={handleSaveDisplayName}
+                        className={`w-28 px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors text-sm text-white ${
+                        displayNameSaved
+                            ? 'bg-green-600 cursor-default'
+                            : 'bg-indigo-600 hover:bg-indigo-700'
+                        }`}
+                        aria-live="polite"
+                    >
+                        {displayNameSaved ? (
+                        <>
+                            <CheckIcon className="w-5 h-5" />
+                            <span>Saved</span>
+                        </>
+                        ) : (
+                        'Save'
                         )}
                     </button>
                 </div>

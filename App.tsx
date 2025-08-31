@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
 import { CallState, CallHistoryEntry, PinnedEntry, CallStats, IncomingCall, PeerStatus } from './types';
@@ -87,13 +88,8 @@ const ConnectionStatusIndicator: React.FC<{ callState: CallState, connectionStat
     return (
         <div className="flex items-center gap-2 text-sm text-white" title={`Connection Status: ${text}${isE2EEActive ? ' (End-to-End Encrypted)' : ''}`}>
             <span className={`w-3 h-3 rounded-full ${color} ${animate ? 'animate-pulse' : ''}`}></span>
+            {isE2EEActive && <LockIcon className="w-4 h-4 text-green-400" />}
             <span className="font-semibold hidden sm:block">{text}</span>
-            {isE2EEActive && (
-                <div className="flex items-center gap-1 text-green-300 ml-2 bg-green-900/50 border border-green-700/60 px-2 py-0.5 rounded-full">
-                    <LockIcon className="w-3 h-3" />
-                    <span className="font-semibold text-xs">Encrypted</span>
-                </div>
-            )}
         </div>
     );
 };

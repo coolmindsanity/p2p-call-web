@@ -3,7 +3,7 @@ import { STUN_SERVERS } from '../constants';
 import { CallState, CallStats, PinnedEntry } from '../types';
 import { db } from '../firebase';
 import { generateCallId } from '../utils/id';
-import { getUserId } from '../utils/user';
+import { getUserId, getUserDisplayName } from '../utils/user';
 import { generateKey, importKey, setupE2EE } from '../utils/crypto';
 
 const MAX_RECONNECTION_ATTEMPTS = 3;
@@ -405,12 +405,19 @@ export const useWebRTC = (initialResolution: string) => {
     setCallId(newCallId);
 
     const myUserId = getUserId();
+    const myDisplayName = getUserDisplayName();
     const incomingCallRef = db.ref(`users/${peer.peerId}/incomingCall`);
     
-    await incomingCallRef.set({
-        from: myUserId,
-        callId: newCallId,
-    });
+    const callPayload: {from: string; callId: string; callerAlias?: string} = {
+      from: myUserId,
+      callId: newCallId,
+    };
+
+    if (myDisplayName) {
+      callPayload.callerAlias = myDisplayName;
+    }
+
+    await incomingCallRef.set(callPayload);
 
     await initiateCall(newCallId, true);
 
