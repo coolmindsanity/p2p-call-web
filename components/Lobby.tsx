@@ -183,7 +183,7 @@ const Lobby: React.FC<LobbyProps> = ({
                     onTouchStart={onTouchStart}
                     onTouchMove={onTouchMove}
                     onTouchEnd={onTouchEnd}
-                    className="w-full max-w-2xl aspect-video rounded-xl overflow-hidden bg-gray-800 shadow-lg ring-2 ring-offset-4 ring-offset-gray-950 ring-indigo-500 relative cursor-grab touch-none"
+                    className="w-full max-w-xl aspect-video rounded-xl overflow-hidden bg-gray-800 shadow-lg ring-2 ring-offset-4 ring-offset-gray-950 ring-indigo-500 relative cursor-grab touch-none"
                 >
                     <VideoPlayer
                         stream={localStream}
@@ -250,7 +250,7 @@ const Lobby: React.FC<LobbyProps> = ({
                         <div className="absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
                     </div>
                     <div className="ml-3 text-white font-medium">
-                        End-to-End Encryption
+                        E2EE
                     </div>
                 </label>
             </div>
@@ -273,8 +273,8 @@ const Lobby: React.FC<LobbyProps> = ({
         </div>
          <style>{`
             @keyframes fade-in {
-                from { opacity: 0; transform: scale(0.98); }
-                to { opacity: 1; transform: scale(1); }
+                from { opacity: 0; }
+                to { opacity: 1; }
             }
             .animate-fade-in {
                 animation: fade-in 0.3s ease-out forwards;

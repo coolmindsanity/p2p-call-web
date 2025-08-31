@@ -22,6 +22,8 @@ export const useWebRTC = (initialResolution: string) => {
   const [callState, setCallState] = useState<CallState>(CallState.IDLE);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isRemoteMuted, setIsRemoteMuted] = useState(false);
+  const [isRemoteVideoOff, setIsRemoteVideoOff] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [callId, setCallId] = useState<string | null>(null);
   const [peerId, setPeerId] = useState<string | null>(null);
@@ -46,23 +48,53 @@ export const useWebRTC = (initialResolution: string) => {
   const hasConnectedOnceRef = useRef(false);
 
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
-  const onMessageCallbackRef = useRef<((data: string) => void) | null>(null);
+  const onChatMessageCallbackRef = useRef<((data: string) => void) | null>(null);
 
   useEffect(() => {
     localStreamRef.current = localStream;
   }, [localStream]);
 
-  const setOnMessage = useCallback((callback: (data: string) => void) => {
-    onMessageCallbackRef.current = callback;
+  const setOnChatMessage = useCallback((callback: (data: string) => void) => {
+    onChatMessageCallbackRef.current = callback;
   }, []);
 
-  const sendMessage = useCallback((message: string) => {
+  const sendDataChannelMessage = useCallback((message: object) => {
     if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-        dataChannelRef.current.send(message);
-    } else {
-        console.error("Data channel is not open. Cannot send message.");
+        dataChannelRef.current.send(JSON.stringify(message));
     }
   }, []);
+
+  const sendMessage = useCallback((chatMessage: string) => {
+      sendDataChannelMessage({ type: 'chat', payload: chatMessage });
+  }, [sendDataChannelMessage]);
+  
+  const handleDataChannelMessage = useCallback((event: MessageEvent) => {
+    try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'chat' && typeof message.payload === 'string') {
+            onChatMessageCallbackRef.current?.(message.payload);
+        } else if (message.type === 'control') {
+            const { type, value } = message.payload;
+            if (type === 'mute') {
+                setIsRemoteMuted(!!value);
+            } else if (type === 'video') {
+                setIsRemoteVideoOff(!!value);
+            }
+        }
+    } catch (e) {
+        // Fallback for old clients that might send plain text for chat
+        if (typeof event.data === 'string') {
+             onChatMessageCallbackRef.current?.(event.data);
+        }
+        console.warn('Could not parse data channel message:', event.data, e);
+    }
+  }, []);
+
+  const onDataChannelOpen = useCallback(() => {
+    console.log('Data channel opened.');
+    sendDataChannelMessage({ type: 'control', payload: { type: 'mute', value: isMuted } });
+    sendDataChannelMessage({ type: 'control', payload: { type: 'video', value: isVideoOff } });
+  }, [isMuted, isVideoOff, sendDataChannelMessage]);
 
   const cleanUp = useCallback((keepCallDoc = false) => {
     if (peerConnectionRef.current) {
@@ -98,7 +130,7 @@ export const useWebRTC = (initialResolution: string) => {
         dataChannelRef.current.close();
         dataChannelRef.current = null;
     }
-    onMessageCallbackRef.current = null;
+    onChatMessageCallbackRef.current = null;
 
     callDocRef.current = null;
     answerCandidatesRef.current = null;
@@ -107,6 +139,8 @@ export const useWebRTC = (initialResolution: string) => {
     lastStatsRef.current = null;
     hasConnectedOnceRef.current = false;
     setIsE2EEActive(false);
+    setIsRemoteMuted(false);
+    setIsRemoteVideoOff(false);
     setCallStats(null);
   }, [remoteStream]);
 
@@ -223,10 +257,8 @@ export const useWebRTC = (initialResolution: string) => {
     
     pc.ondatachannel = (event) => {
         dataChannelRef.current = event.channel;
-        dataChannelRef.current.onmessage = (e) => {
-            onMessageCallbackRef.current?.(e.data);
-        };
-        dataChannelRef.current.onopen = () => console.log('Data channel opened by peer.');
+        dataChannelRef.current.onmessage = handleDataChannelMessage;
+        dataChannelRef.current.onopen = onDataChannelOpen;
         dataChannelRef.current.onclose = () => console.log('Data channel closed by peer.');
     };
 
@@ -325,7 +357,7 @@ export const useWebRTC = (initialResolution: string) => {
     peerConnectionRef.current = pc;
     setConnectionState(pc.connectionState);
     return pc;
-  }, [restartIce, hangUp, callState]);
+  }, [restartIce, hangUp, callState, handleDataChannelMessage, onDataChannelOpen]);
 
   const initiateCall = useCallback(async (id: string, isRinging: boolean = false) => {
     if (!localStreamRef.current) {
@@ -341,11 +373,9 @@ export const useWebRTC = (initialResolution: string) => {
     setCallId(id);
 
     const dc = pc.createDataChannel('chat');
-    dc.onopen = () => console.log('Data channel opened.');
+    dc.onopen = onDataChannelOpen;
     dc.onclose = () => console.log('Data channel closed.');
-    dc.onmessage = (e) => {
-        onMessageCallbackRef.current?.(e.data);
-    };
+    dc.onmessage = handleDataChannelMessage;
     dataChannelRef.current = dc;
 
     callDocRef.current = db.ref(`calls/${id}`);
@@ -413,7 +443,7 @@ export const useWebRTC = (initialResolution: string) => {
       setCallState(CallState.WAITING_FOR_ANSWER);
     }
     
-  }, [createPeerConnection, hangUp, callState, peerId, cleanUp, enableE2EE]);
+  }, [createPeerConnection, hangUp, callState, peerId, cleanUp, enableE2EE, onDataChannelOpen, handleDataChannelMessage]);
 
   const ringUser = useCallback(async (peer: PinnedEntry) => {
     if (!peer.peerId) {
@@ -549,21 +579,25 @@ export const useWebRTC = (initialResolution: string) => {
 
   const toggleMute = useCallback(() => {
     if (localStreamRef.current) {
+      const newMutedState = !isMuted;
       localStreamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = !track.enabled;
+        track.enabled = !newMutedState;
       });
-      setIsMuted(prev => !prev);
+      setIsMuted(newMutedState);
+      sendDataChannelMessage({ type: 'control', payload: { type: 'mute', value: newMutedState } });
     }
-  }, []);
+  }, [isMuted, sendDataChannelMessage]);
 
   const toggleVideo = useCallback(() => {
     if (localStreamRef.current) {
+      const newVideoOffState = !isVideoOff;
       localStreamRef.current.getVideoTracks().forEach(track => {
-        track.enabled = !track.enabled;
+        track.enabled = !newVideoOffState;
       });
-      setIsVideoOff(prev => !prev);
+      setIsVideoOff(newVideoOffState);
+      sendDataChannelMessage({ type: 'control', payload: { type: 'video', value: newVideoOffState } });
     }
-  }, []);
+  }, [isVideoOff, sendDataChannelMessage]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -592,6 +626,8 @@ export const useWebRTC = (initialResolution: string) => {
     callStats,
     resolution,
     setResolution,
+    isRemoteMuted,
+    isRemoteVideoOff,
     enableE2EE,
     setEnableE2EE,
     enterLobby,
@@ -603,7 +639,7 @@ export const useWebRTC = (initialResolution: string) => {
     toggleVideo,
     hangUp,
     reset,
-    setOnMessage,
+    setOnChatMessage,
     sendMessage,
   };
 };
