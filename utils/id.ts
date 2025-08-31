@@ -24,3 +24,16 @@ export const generateCallId = (): string => {
   const verb = verbs[Math.floor(Math.random() * verbs.length)];
   return `${adj}-${noun}-${verb}`;
 };
+
+/**
+ * A simple RFC4122 version 4 compliant UUID generator.
+ * This is used to create a unique anonymous ID for each user without
+ * requiring external dependencies.
+ */
+export const generateUUID = (): string => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};

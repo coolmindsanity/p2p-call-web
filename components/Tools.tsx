@@ -4,6 +4,7 @@ import { getPinned } from '../utils/pins';
 import { CallHistoryEntry, PinnedEntry } from '../types';
 
 interface ToolsProps {
+  userId: string | null;
   onRestore: (data: { history: CallHistoryEntry[], pinned: PinnedEntry[] }) => void;
 }
 
@@ -25,12 +26,25 @@ const SendIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
+const CheckIcon: React.FC<{className?: string}> = ({className}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+    </svg>
+);
 
-const Tools: React.FC<ToolsProps> = ({ onRestore }) => {
+const QuestionMarkCircleIcon: React.FC<{className?: string}> = ({className}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+    </svg>
+);
+
+
+const Tools: React.FC<ToolsProps> = ({ userId, onRestore }) => {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [feedbackText, setFeedbackText] = useState('');
     const [feedbackSent, setFeedbackSent] = useState(false);
+    const [idCopied, setIdCopied] = useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     const handleBackup = () => {
@@ -112,25 +126,76 @@ const Tools: React.FC<ToolsProps> = ({ onRestore }) => {
         setTimeout(() => setFeedbackSent(false), 3000);
     };
 
+    const handleCopyUserId = () => {
+        if (!userId || idCopied) return;
+        navigator.clipboard.writeText(userId).then(() => {
+            setIdCopied(true);
+            setTimeout(() => setIdCopied(false), 2000);
+        });
+    };
+
     return (
         <div className="w-full max-w-sm space-y-8">
-            <div className="p-6 bg-gray-800/50 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-200 mb-2">Backup Data</h3>
-                <p className="text-sm text-gray-400 mb-4">
+            <div className="p-6 bg-white/50 dark:bg-gray-800/50 rounded-lg shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200">My User ID</h3>
+                    <div className="group relative flex items-center">
+                        <QuestionMarkCircleIcon className="w-5 h-5 text-gray-400 dark:text-gray-500 cursor-help" />
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-lg text-xs text-center text-slate-700 dark:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                            Share this permanent ID to let others call you directly. Use a temporary Call ID for single-use invitations.
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-50 dark:bg-gray-900 border-r border-b border-slate-200 dark:border-gray-700 rotate-45"></div>
+                        </div>
+                    </div>
+                </div>
+                <p className="text-sm text-slate-600 dark:text-gray-400 mb-4">
+                    Share this ID with others so they can call you directly.
+                </p>
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        readOnly
+                        value={userId || 'Loading...'}
+                        className="flex-grow px-3 py-2 bg-slate-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-mono text-slate-600 dark:text-gray-300"
+                        aria-label="Your User ID"
+                    />
+                     <button
+                        onClick={handleCopyUserId}
+                        className={`w-28 px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors text-sm text-white ${
+                        idCopied
+                            ? 'bg-green-600 cursor-default'
+                            : 'bg-indigo-600 hover:bg-indigo-700'
+                        }`}
+                        aria-live="polite"
+                    >
+                        {idCopied ? (
+                        <>
+                            <CheckIcon className="w-5 h-5" />
+                            <span>Copied!</span>
+                        </>
+                        ) : (
+                        'Copy ID'
+                        )}
+                    </button>
+                </div>
+            </div>
+
+            <div className="p-6 bg-white/50 dark:bg-gray-800/50 rounded-lg shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">Backup Data</h3>
+                <p className="text-sm text-slate-600 dark:text-gray-400 mb-4">
                     Download your call history and pinned contacts as a JSON file. Keep this file safe to restore your data later.
                 </p>
                 <button
                     onClick={handleBackup}
-                    className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold flex items-center justify-center gap-2 transition-transform transform hover:scale-105"
+                    className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold flex items-center justify-center gap-2 transition-transform transform hover:scale-105 text-white"
                 >
                     <DownloadIcon className="w-5 h-5" />
                     Download Backup
                 </button>
             </div>
 
-            <div className="p-6 bg-gray-800/50 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-200 mb-2">Restore Data</h3>
-                <p className="text-sm text-gray-400 mb-4">
+            <div className="p-6 bg-white/50 dark:bg-gray-800/50 rounded-lg shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">Restore Data</h3>
+                <p className="text-sm text-slate-600 dark:text-gray-400 mb-4">
                     Select a backup file to restore your data. This will overwrite your current history and pinned contacts.
                 </p>
                 <div className="flex flex-col gap-3">
@@ -139,33 +204,33 @@ const Tools: React.FC<ToolsProps> = ({ onRestore }) => {
                         type="file"
                         accept=".json"
                         onChange={handleFileChange}
-                        className="block w-full text-sm text-gray-400
+                        className="block w-full text-sm text-gray-500 dark:text-gray-400
                         file:mr-4 file:py-2 file:px-4
                         file:rounded-md file:border-0
                         file:text-sm file:font-semibold
-                        file:bg-gray-700 file:text-gray-200
-                        hover:file:bg-gray-600"
+                        file:bg-gray-200 dark:file:bg-gray-700 file:text-gray-700 dark:file:text-gray-200
+                        hover:file:bg-gray-300 dark:hover:file:bg-gray-600"
                         aria-label="Select backup file"
                     />
                     <button
                         onClick={handleRestore}
                         disabled={!selectedFile}
-                        className="w-full px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        className="w-full px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors disabled:bg-gray-400 dark:disabled:bg-gray-700 disabled:text-gray-300 dark:disabled:text-gray-400 disabled:cursor-not-allowed"
                     >
                         <UploadIcon className="w-5 h-5" />
                         Restore From File
                     </button>
                 </div>
                  {error && (
-                    <p className="text-red-400 text-sm mt-3" role="alert">
+                    <p className="text-red-500 dark:text-red-400 text-sm mt-3" role="alert">
                         {error}
                     </p>
                 )}
             </div>
 
-            <div className="p-6 bg-gray-800/50 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-200 mb-2">Send Feedback</h3>
-                <p className="text-sm text-gray-400 mb-4">
+            <div className="p-6 bg-white/50 dark:bg-gray-800/50 rounded-lg shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-200 mb-2">Send Feedback</h3>
+                <p className="text-sm text-slate-600 dark:text-gray-400 mb-4">
                     Have a suggestion or found a bug? Let us know!
                 </p>
                 <div className="flex flex-col gap-3">
@@ -174,20 +239,20 @@ const Tools: React.FC<ToolsProps> = ({ onRestore }) => {
                         onChange={(e) => setFeedbackText(e.target.value)}
                         placeholder="Type your feedback here..."
                         rows={4}
-                        className="block w-full text-sm text-gray-200 bg-gray-900 border border-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                        className="block w-full text-sm text-slate-800 dark:text-gray-200 bg-slate-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
                         aria-label="Feedback input"
                     />
                     <button
                         onClick={handleSendFeedback}
                         disabled={!feedbackText.trim()}
-                        className="w-full px-4 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        className="w-full px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors disabled:bg-gray-400 dark:disabled:bg-gray-700 disabled:text-gray-300 dark:disabled:text-gray-400 disabled:cursor-not-allowed"
                     >
                         <SendIcon className="w-5 h-5" />
                         Send Feedback
                     </button>
                 </div>
                 {feedbackSent && (
-                    <p className="text-green-400 text-sm mt-3 text-center" role="status">
+                    <p className="text-green-600 dark:text-green-400 text-sm mt-3 text-center" role="status">
                         Thank you for your feedback!
                     </p>
                 )}

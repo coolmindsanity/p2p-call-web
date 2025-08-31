@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 
 interface ControlsProps {
   onToggleMute: () => void;
@@ -6,6 +6,7 @@ interface ControlsProps {
   onHangUp: () => void;
   isMuted: boolean;
   isVideoOff: boolean;
+  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
 }
 
 const MuteIcon: React.FC<{className?: string}> = ({className}) => (
@@ -42,24 +43,28 @@ const HangUpIcon: React.FC<{className?: string}> = ({className}) => (
 );
 
 
-const Controls: React.FC<ControlsProps> = ({ onToggleMute, onToggleVideo, onHangUp, isMuted, isVideoOff }) => {
+const Controls = forwardRef<HTMLDivElement, ControlsProps>(({ onToggleMute, onToggleVideo, onHangUp, isMuted, isVideoOff, onPointerDown }, ref) => {
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-gray-800/70 backdrop-blur-sm p-3 rounded-full shadow-lg">
+    <div 
+      ref={ref}
+      onPointerDown={onPointerDown}
+      className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm p-3 rounded-full shadow-lg cursor-move touch-action-none border border-slate-300/70 dark:border-white/10"
+    >
       <button 
         onClick={onToggleMute} 
-        className={`p-3 rounded-full transition-colors ${isMuted ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-gray-600 hover:bg-gray-500'}`}
+        className={`p-3 rounded-full transition-colors ${isMuted ? 'bg-amber-500 hover:bg-amber-600' : 'bg-slate-300 hover:bg-slate-400/80 dark:bg-gray-600 dark:hover:bg-gray-500'}`}
         aria-label={isMuted ? 'Unmute' : 'Mute'}
         title={isMuted ? 'Unmute' : 'Mute'}
       >
-        {isMuted ? <UnmuteIcon className="w-6 h-6 text-white"/> : <MuteIcon className="w-6 h-6 text-white" />}
+        {isMuted ? <UnmuteIcon className="w-6 h-6 text-white"/> : <MuteIcon className="w-6 h-6 text-slate-800 dark:text-white" />}
       </button>
       <button 
         onClick={onToggleVideo} 
-        className={`p-3 rounded-full transition-colors ${isVideoOff ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-gray-600 hover:bg-gray-500'}`}
+        className={`p-3 rounded-full transition-colors ${isVideoOff ? 'bg-amber-500 hover:bg-amber-600' : 'bg-slate-300 hover:bg-slate-400/80 dark:bg-gray-600 dark:hover:bg-gray-500'}`}
         aria-label={isVideoOff ? 'Turn video on' : 'Turn video off'}
         title={isVideoOff ? 'Turn video on' : 'Turn video off'}
       >
-        {isVideoOff ? <VideoOffIcon className="w-6 h-6 text-white"/> : <VideoOnIcon className="w-6 h-6 text-white" />}
+        {isVideoOff ? <VideoOffIcon className="w-6 h-6 text-white"/> : <VideoOnIcon className="w-6 h-6 text-slate-800 dark:text-white" />}
       </button>
       <button 
         onClick={onHangUp} 
@@ -71,6 +76,6 @@ const Controls: React.FC<ControlsProps> = ({ onToggleMute, onToggleVideo, onHang
       </button>
     </div>
   );
-};
+});
 
 export default Controls;

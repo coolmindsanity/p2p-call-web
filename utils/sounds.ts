@@ -1,4 +1,5 @@
 let audioCtx: AudioContext | null = null;
+let ringingInterval: ReturnType<typeof setInterval> | null = null;
 
 const initAudioContext = () => {
   if (!audioCtx) {
@@ -53,4 +54,21 @@ export const playConnectedSound = () => {
 export const playEndedSound = () => {
   playTone(783.99, 0.1, 0);
   playTone(523.25, 0.2, 0.1);
+};
+
+export const playRingingSound = () => {
+    stopRingingSound(); // Ensure no multiple intervals are running
+    const playSequence = () => {
+        playTone(600, 0.15, 0);
+        playTone(800, 0.20, 0.2);
+    };
+    playSequence(); // Play immediately
+    ringingInterval = setInterval(playSequence, 2000); // Repeat every 2 seconds
+};
+
+export const stopRingingSound = () => {
+    if (ringingInterval) {
+        clearInterval(ringingInterval);
+        ringingInterval = null;
+    }
 };

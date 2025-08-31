@@ -1,8 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { STUN_SERVERS } from '../constants';
-import { CallState } from '../types';
+import { CallState, CallStats, PinnedEntry } from '../types';
 import { db } from '../firebase';
 import { generateCallId } from '../utils/id';
+import { getUserId } from '../utils/user';
+import { generateKey, importKey, setupE2EE } from '../utils/crypto';
+
+const MAX_RECONNECTION_ATTEMPTS = 3;
+const RING_TIMEOUT_MS = 30000; // 30 seconds
 
 export const useWebRTC = () => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -13,13 +18,24 @@ export const useWebRTC = () => {
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [callId, setCallId] = useState<string | null>(null);
+  const [peerId, setPeerId] = useState<string | null>(null);
+  const [isE2EEActive, setIsE2EEActive] = useState(false);
+  const [callStats, setCallStats] = useState<CallStats | null>(null);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const encryptionKeyRef = useRef<CryptoKey | null>(null);
   const callDocRef = useRef<any>(null); // Firebase Database Reference
   const answerCandidatesRef = useRef<any>(null); // Firebase Database Reference
   const offerCandidatesRef = useRef<any>(null); // Firebase Database Reference
+  
+  const reconnectionAttemptsRef = useRef(0);
+  const isCallerRef = useRef(false);
+  const reconnectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ringingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastStatsRef = useRef<{ timestamp: number, totalBytesSent: number, totalBytesReceived: number } | null>(null);
 
-  const cleanUp = useCallback(() => {
+  const cleanUp = useCallback((keepCallDoc = false) => {
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
@@ -38,22 +54,56 @@ export const useWebRTC = () => {
     if (answerCandidatesRef.current) answerCandidatesRef.current.off();
     if (offerCandidatesRef.current) offerCandidatesRef.current.off();
     
-    // Optionally delete the call document from the database
-    if (callDocRef.current) callDocRef.current.remove();
+    if (reconnectionTimerRef.current) clearTimeout(reconnectionTimerRef.current);
+    if (ringingTimeoutRef.current) clearTimeout(ringingTimeoutRef.current);
+    if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+
+    reconnectionTimerRef.current = null;
+    ringingTimeoutRef.current = null;
+    statsIntervalRef.current = null;
+    
+    // Deleting the call document from the database is crucial for allowing the call ID to be reused.
+    if (callDocRef.current && !keepCallDoc) callDocRef.current.remove();
 
     callDocRef.current = null;
     answerCandidatesRef.current = null;
     offerCandidatesRef.current = null;
+    encryptionKeyRef.current = null;
+    lastStatsRef.current = null;
+    setIsE2EEActive(false);
+    setCallStats(null);
   }, [localStream, remoteStream]);
 
   const hangUp = useCallback(() => {
     cleanUp();
     setCallState(CallState.ENDED);
   }, [cleanUp]);
+
+  const declineCall = useCallback(async (incomingCallId: string, peerToRingId?: string) => {
+    // For the person declining the call, they just need to clean their state
+    if (!peerToRingId) {
+       cleanUp();
+       setCallState(CallState.IDLE);
+       return;
+    }
+
+    // The caller needs to clean up the ringing state for the callee
+    const calleeIncomingCallRef = db.ref(`users/${peerToRingId}/incomingCall`);
+    await calleeIncomingCallRef.remove();
+    
+    const callRef = db.ref(`calls/${incomingCallId}`);
+    await callRef.update({ declined: true });
+    
+    cleanUp(true); // Keep call doc for a moment so decline can be seen
+    setTimeout(() => db.ref(`calls/${incomingCallId}`).remove(), 2000);
+
+    setCallState(CallState.IDLE);
+  }, [cleanUp]);
   
   const reset = useCallback(() => {
     cleanUp();
     setCallId(null);
+    setPeerId(null);
     setErrorMessage(null);
     setConnectionState('new');
     setCallState(CallState.IDLE);
@@ -63,6 +113,9 @@ export const useWebRTC = () => {
     try {
       setErrorMessage(null);
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      // Set initial mute/video state from component state, in case it was toggled in the lobby
+      stream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+      stream.getVideoTracks().forEach(t => t.enabled = !isVideoOff);
       setLocalStream(stream);
       return stream;
     } catch (error) {
@@ -79,7 +132,34 @@ export const useWebRTC = () => {
       setCallState(CallState.MEDIA_ERROR);
       return null;
     }
-  }, []);
+  }, [isMuted, isVideoOff]);
+  
+  const enterLobby = useCallback(async () => {
+    const stream = await initMedia();
+    if(stream) {
+        setCallState(CallState.LOBBY);
+    }
+  }, [initMedia]);
+
+  const restartIce = useCallback(async () => {
+      const pc = peerConnectionRef.current;
+      if (!pc || !callDocRef.current) return;
+
+      try {
+          const offerDescription = await pc.createOffer({ iceRestart: true });
+          await pc.setLocalDescription(offerDescription);
+
+          const offer = {
+              sdp: offerDescription.sdp,
+              type: offerDescription.type,
+          };
+
+          await callDocRef.current.update({ offer });
+      } catch (error) {
+          console.error("Failed to restart ICE connection:", error);
+          hangUp(); // If restart fails, end the call to avoid getting stuck.
+      }
+  }, [hangUp]);
 
   const createPeerConnection = useCallback((stream: MediaStream) => {
     const pc = new RTCPeerConnection(STUN_SERVERS);
@@ -96,7 +176,88 @@ export const useWebRTC = () => {
       if (pc) {
         setConnectionState(pc.connectionState);
         if (pc.connectionState === 'connected') {
+          if (ringingTimeoutRef.current) clearTimeout(ringingTimeoutRef.current);
+          reconnectionAttemptsRef.current = 0; // Reset attempts on successful connection
+          if (reconnectionTimerRef.current) {
+            clearTimeout(reconnectionTimerRef.current);
+            reconnectionTimerRef.current = null;
+          }
+          if (statsIntervalRef.current) {
+            clearInterval(statsIntervalRef.current);
+          }
+          statsIntervalRef.current = setInterval(async () => {
+            if (peerConnectionRef.current) {
+              const stats = await peerConnectionRef.current.getStats();
+              let newStats: CallStats = { packetsLost: null, jitter: null, roundTripTime: null, uploadBitrate: null, downloadBitrate: null };
+              let totalBytesSent = 0;
+              let totalBytesReceived = 0;
+              const now = Date.now();
+              
+              stats.forEach(report => {
+                if (report.type === 'remote-inbound-rtp' && report.kind === 'video') {
+                  newStats.packetsLost = report.packetsLost;
+                  newStats.jitter = report.jitter ? Math.round(report.jitter * 1000) : null;
+                }
+                if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                   newStats.roundTripTime = report.currentRoundTripTime ? Math.round(report.currentRoundTripTime * 1000) : null;
+                }
+                if (report.type === 'outbound-rtp') {
+                    totalBytesSent += report.bytesSent;
+                }
+                if (report.type === 'inbound-rtp') {
+                    totalBytesReceived += report.bytesReceived;
+                }
+              });
+
+              if (lastStatsRef.current) {
+                const timeDiffSeconds = (now - lastStatsRef.current.timestamp) / 1000;
+                if (timeDiffSeconds > 0) {
+                    const sentDiff = totalBytesSent - lastStatsRef.current.totalBytesSent;
+                    const receivedDiff = totalBytesReceived - lastStatsRef.current.totalBytesReceived;
+                    // Bitrate in kbps = (bytes * 8) / (time_in_seconds * 1000)
+                    newStats.uploadBitrate = Math.round((sentDiff * 8) / (timeDiffSeconds * 1000));
+                    newStats.downloadBitrate = Math.round((receivedDiff * 8) / (timeDiffSeconds * 1000));
+                }
+              }
+              lastStatsRef.current = { timestamp: now, totalBytesSent, totalBytesReceived };
+
+              setCallStats(newStats);
+            }
+          }, 1000);
+          
           setCallState(CallState.CONNECTED);
+          if (encryptionKeyRef.current) {
+             if (setupE2EE(pc, encryptionKeyRef.current)) {
+                setIsE2EEActive(true);
+             }
+          }
+        } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          setIsE2EEActive(false);
+          setCallStats(null);
+          if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+          lastStatsRef.current = null;
+          // Only schedule a reconnect if one isn't already pending. This prevents race conditions from multiple disconnection events.
+          if (isCallerRef.current && reconnectionAttemptsRef.current < MAX_RECONNECTION_ATTEMPTS && !reconnectionTimerRef.current) {
+            reconnectionTimerRef.current = setTimeout(() => {
+                reconnectionAttemptsRef.current++;
+                console.log(`Connection lost. Attempting to reconnect... (Attempt ${reconnectionAttemptsRef.current})`);
+                setCallState(CallState.RECONNECTING);
+                
+                // Clear the timer ref *before* starting the attempt, allowing a new one to be scheduled if this one also fails.
+                reconnectionTimerRef.current = null;
+                
+                restartIce();
+            }, 2000 * reconnectionAttemptsRef.current); // Linear backoff: 0s, 2s, 4s...
+          } else if (reconnectionAttemptsRef.current >= MAX_RECONNECTION_ATTEMPTS && callState !== CallState.ENDED) {
+             // If we've exhausted retries and are not already in an ENDED state, hang up.
+             console.log("Reconnection failed after maximum attempts.");
+             hangUp();
+          }
+        } else if (['closed'].includes(pc.connectionState)) {
+          setIsE2EEActive(false);
+          setCallStats(null);
+          if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+          lastStatsRef.current = null;
         }
       }
     };
@@ -104,59 +265,147 @@ export const useWebRTC = () => {
     peerConnectionRef.current = pc;
     setConnectionState(pc.connectionState);
     return pc;
-  }, []);
+  }, [restartIce, hangUp, callState]);
 
-  const startCall = useCallback(async () => {
-    setCallState(CallState.CREATING_OFFER);
-    const stream = await initMedia();
-    if (stream) {
-      const pc = createPeerConnection(stream);
-      const newCallId = generateCallId();
-      setCallId(newCallId);
+  const initiateCall = useCallback(async (id: string, isRinging: boolean = false) => {
+    if (!localStream) {
+        console.error("Cannot initiate call without a local stream.");
+        setCallState(CallState.MEDIA_ERROR);
+        return;
+    }
+    setCallState(isRinging ? CallState.RINGING : CallState.CREATING_OFFER);
+    isCallerRef.current = true;
+    reconnectionAttemptsRef.current = 0;
+    
+    // Generate a new encryption key for this call.
+    const { key, rawKey } = await generateKey();
+    encryptionKeyRef.current = key;
 
-      callDocRef.current = db.ref(`calls/${newCallId}`);
-      offerCandidatesRef.current = callDocRef.current.child('offerCandidates');
-      answerCandidatesRef.current = callDocRef.current.child('answerCandidates');
-      
-      pc.onicecandidate = (event) => {
-        event.candidate && offerCandidatesRef.current.push(event.candidate.toJSON());
-      };
-      
-      const offerDescription = await pc.createOffer();
-      await pc.setLocalDescription(offerDescription);
-      
-      const offer = {
-        sdp: offerDescription.sdp,
-        type: offerDescription.type,
-      };
+    const pc = createPeerConnection(localStream);
+    setCallId(id);
 
-      await callDocRef.current.set({ offer });
+    callDocRef.current = db.ref(`calls/${id}`);
+    offerCandidatesRef.current = callDocRef.current.child('offerCandidates');
+    answerCandidatesRef.current = callDocRef.current.child('answerCandidates');
+    
+    pc.onicecandidate = (event) => {
+      event.candidate && offerCandidatesRef.current.push(event.candidate.toJSON());
+    };
+    
+    const offerDescription = await pc.createOffer();
+    await pc.setLocalDescription(offerDescription);
+    
+    const offer = {
+      sdp: offerDescription.sdp,
+      type: offerDescription.type,
+    };
 
-      callDocRef.current.on('value', (snapshot: any) => {
-        const data = snapshot.val();
-        if (!pc.currentRemoteDescription && data?.answer) {
-          const answerDescription = new RTCSessionDescription(data.answer);
-          pc.setRemoteDescription(answerDescription);
+    const callerId = getUserId();
+    const exportableKey = Array.from(new Uint8Array(rawKey));
+    await callDocRef.current.set({ offer, encryptionKey: exportableKey, callerId });
+
+    callDocRef.current.on('value', async (snapshot: any) => {
+      const data = snapshot.val();
+      if (!data) {
+        if (callState !== CallState.IDLE && callState !== CallState.ENDED) {
+          hangUp();
         }
-      });
-      
-      answerCandidatesRef.current.on('child_added', (snapshot: any) => {
-        const candidate = new RTCIceCandidate(snapshot.val());
-        pc.addIceCandidate(candidate);
-      });
-      
+        return;
+      }
+
+      if (data?.declined) {
+          setCallState(CallState.DECLINED);
+          cleanUp();
+          setTimeout(() => reset(), 2000); // Go to home screen after 2s
+          return;
+      }
+
+      if (data?.joinerId && !peerId) {
+          setPeerId(data.joinerId);
+      }
+
+      if (data?.answer && (!pc.currentRemoteDescription || pc.currentRemoteDescription.sdp !== data.answer.sdp)) {
+        const answerDescription = new RTCSessionDescription(data.answer);
+        await pc.setRemoteDescription(answerDescription);
+      }
+    });
+    
+    answerCandidatesRef.current.on('child_added', (snapshot: any) => {
+      const candidate = new RTCIceCandidate(snapshot.val());
+      pc.addIceCandidate(candidate);
+    });
+
+    if (!isRinging) {
       setCallState(CallState.WAITING_FOR_ANSWER);
     }
-  }, [initMedia, createPeerConnection]);
+    
+  }, [createPeerConnection, hangUp, callState, peerId, reset, cleanUp, localStream]);
+
+  const ringUser = useCallback(async (peer: PinnedEntry) => {
+    if (!peer.peerId) {
+        console.error("Cannot ring user without a peer ID.");
+        return;
+    }
+    const newCallId = generateCallId();
+    setPeerId(peer.peerId); // Set who we are calling
+    setCallId(newCallId);
+
+    const myUserId = getUserId();
+    const incomingCallRef = db.ref(`users/${peer.peerId}/incomingCall`);
+    
+    await incomingCallRef.set({
+        from: myUserId,
+        callId: newCallId,
+    });
+
+    await initiateCall(newCallId, true);
+
+    // Set a timeout to cancel the ring if there's no answer
+    ringingTimeoutRef.current = setTimeout(() => {
+        declineCall(newCallId, peer.peerId); // Clean up for the other user and self
+    }, RING_TIMEOUT_MS);
+
+  }, [initiateCall, declineCall]);
+
+
+  const startCall = useCallback(async () => {
+    const newCallId = generateCallId();
+    await initiateCall(newCallId);
+  }, [initiateCall]);
 
   const joinCall = useCallback(async (id: string) => {
-    setCallState(CallState.JOINING);
-    const stream = await initMedia();
-    if (stream) {
-      const pc = createPeerConnection(stream);
+    isCallerRef.current = false;
+    reconnectionAttemptsRef.current = 0;
+
+    const callRef = db.ref(`calls/${id}`);
+    const callSnapshot = await callRef.get();
+    const callData = callSnapshot.val();
+      
+    // If the call document exists and has an offer, we are joining.
+    if (callData?.offer) {
+      if (!localStream) {
+        console.error("Cannot join call without a local stream.");
+        setCallState(CallState.MEDIA_ERROR);
+        return;
+      }
+      setCallState(CallState.JOINING);
+
+      if (callData.callerId) {
+        setPeerId(callData.callerId);
+      }
+
+      if (callData.encryptionKey) {
+        // Retrieve the key, convert it from an array back to ArrayBuffer, and import it.
+        const rawKey = new Uint8Array(callData.encryptionKey).buffer;
+        encryptionKeyRef.current = await importKey(rawKey);
+      } else {
+        console.warn("Call does not support E2EE: encryption key is missing from signaling data.");
+      }
+      
+      const pc = createPeerConnection(localStream);
       setCallId(id);
 
-      callDocRef.current = db.ref(`calls/${id}`);
+      callDocRef.current = callRef;
       offerCandidatesRef.current = callDocRef.current.child('offerCandidates');
       answerCandidatesRef.current = callDocRef.current.child('answerCandidates');
 
@@ -164,33 +413,61 @@ export const useWebRTC = () => {
         event.candidate && answerCandidatesRef.current.push(event.candidate.toJSON());
       };
 
-      const callSnapshot = await callDocRef.current.get();
-      const callData = callSnapshot.val();
+      await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+
+      const answerDescription = await pc.createAnswer();
+      await pc.setLocalDescription(answerDescription);
+
+      const answer = {
+        type: answerDescription.type,
+        sdp: answerDescription.sdp,
+      };
       
-      if (callData?.offer) {
-          await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+      const joinerId = getUserId();
+      await callDocRef.current.update({ answer, joinerId });
+      
+      const calleeIncomingCallRef = db.ref(`users/${joinerId}/incomingCall`);
+      await calleeIncomingCallRef.remove();
 
-          const answerDescription = await pc.createAnswer();
-          await pc.setLocalDescription(answerDescription);
+      offerCandidatesRef.current.on('child_added', (snapshot: any) => {
+        const candidate = new RTCIceCandidate(snapshot.val());
+        pc.addIceCandidate(candidate);
+      });
 
-          const answer = {
-            type: answerDescription.type,
-            sdp: answerDescription.sdp,
-          };
-          
-          await callDocRef.current.update({ answer });
-          
-          offerCandidatesRef.current.on('child_added', (snapshot: any) => {
-            const candidate = new RTCIceCandidate(snapshot.val());
-            pc.addIceCandidate(candidate);
-          });
-          setCallState(CallState.CREATING_ANSWER);
-      } else {
-          setErrorMessage(`Call ID "${id}" not found or is invalid.`);
-          reset();
-      }
+      // Listen for subsequent offer changes (for ICE restarts)
+      callDocRef.current.on('value', async (snapshot: any) => {
+          const data = snapshot.val();
+          if (!data) {
+              if (callState !== CallState.IDLE && callState !== CallState.ENDED) {
+                  hangUp();
+              }
+              return;
+          }
+          if (data?.offer && pc.remoteDescription?.sdp !== data.offer.sdp) {
+              console.log("Received a new offer for reconnection.");
+              setCallState(CallState.RECONNECTING);
+              await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+              
+              const answerDescription = await pc.createAnswer();
+              await pc.setLocalDescription(answerDescription);
+  
+              const newAnswer = {
+                type: answerDescription.type,
+                sdp: answerDescription.sdp,
+              };
+              
+              await callDocRef.current.update({ answer: newAnswer });
+          }
+      });
+
+      setCallState(CallState.CREATING_ANSWER);
+    } else {
+        // Otherwise, the call ID is free, so we initiate a new call with this ID.
+        // This allows call IDs to be reused.
+        console.log(`Call ID "${id}" is available. Initializing a new call.`);
+        await initiateCall(id);
     }
-  }, [initMedia, createPeerConnection, reset]);
+  }, [createPeerConnection, hangUp, initiateCall, callState, localStream]);
 
   const toggleMute = useCallback(() => {
     if (localStream) {
@@ -213,13 +490,16 @@ export const useWebRTC = () => {
   useEffect(() => {
     // Add a beforeunload listener to hang up the call
     const handleBeforeUnload = () => {
-      hangUp();
+      // We only clean up if we are in an active call state
+      if (callState !== CallState.IDLE && callState !== CallState.ENDED) {
+        hangUp();
+      }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [hangUp]);
+  }, [hangUp, callState]);
 
   return {
     localStream,
@@ -230,8 +510,14 @@ export const useWebRTC = () => {
     callState,
     errorMessage,
     callId,
+    peerId,
+    isE2EEActive,
+    callStats,
+    enterLobby,
     startCall,
     joinCall,
+    ringUser,
+    declineCall,
     toggleMute,
     toggleVideo,
     hangUp,
