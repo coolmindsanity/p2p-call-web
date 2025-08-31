@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
 import { CallState, CallHistoryEntry, PinnedEntry, CallStats, IncomingCall, PeerStatus } from './types';
@@ -310,8 +308,9 @@ const App: React.FC = () => {
     }, [joinCall]);
 
     const handleRejoin = useCallback((id: string) => {
-        joinCall(id);
-    }, [joinCall]);
+        setJoinInput(id);
+        enterLobby();
+    }, [enterLobby]);
 
     const handleCreateCall = useCallback(() => {
         startCall();
@@ -321,9 +320,10 @@ const App: React.FC = () => {
         if (pin.peerId) {
             ringUser(pin);
         } else {
-            handleJoin(pin.callId);
+            setJoinInput(pin.callId);
+            enterLobby();
         }
-    }, [ringUser, handleJoin]);
+    }, [ringUser, enterLobby]);
 
     const handleAcceptCall = useCallback(() => {
         if (incomingCall) {
@@ -426,6 +426,7 @@ const App: React.FC = () => {
     }
 
     const isConnecting = [CallState.CREATING_OFFER, CallState.WAITING_FOR_ANSWER, CallState.RINGING, CallState.JOINING, CallState.CREATING_ANSWER].includes(callState);
+    const showMainPage = [CallState.IDLE, CallState.ENDED, CallState.DECLINED].includes(callState);
 
     const renderMainContent = () => {
         if (isConnecting) {
@@ -472,13 +473,18 @@ const App: React.FC = () => {
         { id: 'about', label: 'About' },
     ];
     
+    const handleStartNewCallFlow = useCallback(() => {
+        setJoinInput('');
+        enterLobby();
+    }, [enterLobby]);
+
     const renderTabContent = () => {
         switch(activeTab) {
             case 'new':
                 return (
                     <div className="w-full max-w-lg mx-auto flex flex-col items-center gap-4 p-4">
                         <button
-                            onClick={() => enterLobby()}
+                            onClick={handleStartNewCallFlow}
                             className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-transform transform hover:scale-105 shadow-lg"
                         >
                             Start a New Call
@@ -495,12 +501,12 @@ const App: React.FC = () => {
                                 type="text"
                                 value={joinInput}
                                 onChange={(e) => setJoinInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && enterLobby().then(() => handleJoin(joinInput))}
+                                onKeyDown={(e) => e.key === 'Enter' && joinInput.trim() && enterLobby()}
                                 placeholder="Enter Call ID to join"
                                 className="flex-grow w-full px-4 py-3 bg-gray-800/50 border-2 border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-shadow"
                             />
                             <button
-                                onClick={() => enterLobby().then(() => handleJoin(joinInput))}
+                                onClick={() => joinInput.trim() && enterLobby()}
                                 disabled={!joinInput.trim()}
                                 className="w-full sm:w-auto px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
                             >
@@ -523,38 +529,40 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen text-slate-200">
             {renderMainContent()}
-            <div className="relative container mx-auto px-4 py-8 md:py-16 flex flex-col items-center gap-10">
-                <div className="text-center">
-                    <h1 className="text-5xl md:text-6xl font-extrabold text-white">Simple, Secure Video Calls</h1>
-                    <p className="text-gray-400 mt-2">Connect directly with anyone, anywhere. No accounts, no tracking, just a private peer-to-peer connection.</p>
-                </div>
-                
-                <div className="w-full max-w-2xl mt-8 relative glass-container-glow">
-                    <div className="relative bg-black/30 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden">
-                        <div className="border-b border-gray-200/10 px-4 md:px-8">
-                            <nav className="-mb-px flex space-x-6 justify-center" aria-label="Tabs">
-                                {tabs.map(tab => (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => setActiveTab(tab.id)}
-                                        className={`${
-                                            activeTab === tab.id
-                                            ? 'border-indigo-400 text-slate-100'
-                                            : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
-                                        } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors focus:outline-none`}
-                                        aria-current={activeTab === tab.id ? 'page' : undefined}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                ))}
-                            </nav>
-                        </div>
-                        <div className="min-h-[20rem] p-4 md:p-8 flex justify-center">
-                            {renderTabContent()}
+            {showMainPage && (
+                <div className="relative container mx-auto px-4 py-8 md:py-16 flex flex-col items-center gap-10">
+                    <div className="text-center">
+                        <h1 className="text-5xl md:text-6xl font-extrabold text-white">Simple, Secure Video Calls</h1>
+                        <p className="text-gray-400 mt-2">Connect directly with anyone, anywhere. No accounts, no tracking, just a private peer-to-peer connection.</p>
+                    </div>
+                    
+                    <div className="w-full max-w-2xl mt-8 relative glass-container-glow">
+                        <div className="relative bg-black/30 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden">
+                            <div className="border-b border-gray-200/10 px-4 md:px-8">
+                                <nav className="-mb-px flex space-x-6 justify-center" aria-label="Tabs">
+                                    {tabs.map(tab => (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setActiveTab(tab.id)}
+                                            className={`${
+                                                activeTab === tab.id
+                                                ? 'border-indigo-400 text-slate-100'
+                                                : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
+                                            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors focus:outline-none`}
+                                            aria-current={activeTab === tab.id ? 'page' : undefined}
+                                        >
+                                            {tab.label}
+                                        </button>
+                                    ))}
+                                </nav>
+                            </div>
+                            <div className="min-h-[20rem] p-4 md:p-8 flex justify-center">
+                                {renderTabContent()}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };
