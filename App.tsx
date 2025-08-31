@@ -141,13 +141,13 @@ const CallQualityIndicator: React.FC<{ stats: CallStats }> = ({ stats }) => {
   const qualityLevel = getQualityLevel(stats);
 
   const levelDetails = {
-    good: { text: 'Excellent', color: 'text-green-500 dark:text-green-400' },
-    average: { text: 'Good', color: 'text-yellow-500 dark:text-yellow-400' },
-    poor: { text: 'Poor', color: 'text-red-500 dark:text-red-400' },
-    unknown: { text: 'Unknown', color: 'text-gray-400 dark:text-gray-500' },
+    good: { text: 'Excellent' },
+    average: { text: 'Good' },
+    poor: { text: 'Poor' },
+    unknown: { text: 'Unknown' },
   };
 
-  const { text, color } = levelDetails[qualityLevel];
+  const { text } = levelDetails[qualityLevel];
   
   const statItem = (label: string, value: number | null, unit: string) => (
     <div className="flex justify-between items-center text-xs">
@@ -157,9 +157,8 @@ const CallQualityIndicator: React.FC<{ stats: CallStats }> = ({ stats }) => {
   );
   
   return (
-    <div className="group relative flex items-center gap-2 text-sm text-slate-800 dark:text-white border-l border-gray-700 dark:border-gray-600 pl-3">
+    <div className="group relative flex items-center gap-2 text-sm text-slate-800 dark:text-white border-l border-gray-700 dark:border-gray-600 pl-3" title={`Call Quality: ${text}`}>
       <SignalBarsIcon level={qualityLevel} className="w-5 h-5" />
-      <span className={`font-semibold hidden sm:block ${color}`}>{text}</span>
       
       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-lg text-xs text-slate-700 dark:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 font-mono shadow-lg">
         <h4 className="font-bold text-center mb-2 border-b border-slate-200 dark:border-gray-700 pb-1">Connection Details</h4>

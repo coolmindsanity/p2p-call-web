@@ -124,21 +124,25 @@ const PinnedCalls: React.FC<PinnedCallsProps> = ({ pins, peerStatus, onCall, onU
                 </div>
               ) : (
                 <>
-                  <div className="truncate flex-grow flex items-center gap-3">
-                     {canCallDirectly && (
-                        <div className="flex-shrink-0 w-2 h-2 rounded-full"
-                          title={isOnline ? 'Online' : 'Offline'}
-                          style={{ backgroundColor: isOnline ? '#22c55e' : '#9ca3af' }} // green-500 or gray-400
-                        ></div>
-                      )}
-                    <div className="truncate">
-                      <p className="font-semibold text-base text-slate-800 dark:text-gray-100 truncate" title={pin.alias || pin.callId}>
+                  <div className="truncate flex-grow">
+                    <p className="font-semibold text-base text-slate-800 dark:text-gray-100 truncate" title={pin.alias || pin.callId}>
                         {pin.alias || pin.callId}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-gray-400 font-mono truncate" title={pin.peerId ? `User ID: ${pin.peerId}`: `Call ID: ${pin.callId}`}>
-                        {pin.peerId ? `User ID: ${pin.peerId.substring(0,8)}...` : `Call ID: ${pin.callId}`}
-                      </p>
-                    </div>
+                    </p>
+                    {canCallDirectly ? (
+                        <div className="text-xs flex items-center gap-2 mt-1" title={isOnline ? `Online` : `Offline`}>
+                            <span className="relative flex h-2.5 w-2.5">
+                                {isOnline && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>}
+                                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`}></span>
+                            </span>
+                            <span className={`font-medium ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                {isOnline ? 'Online' : 'Offline'}
+                            </span>
+                        </div>
+                    ) : (
+                        <p className="text-xs text-slate-500 dark:text-gray-400 font-mono truncate mt-1" title={`Call ID: ${pin.callId}`}>
+                            ID: {pin.callId}
+                        </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button

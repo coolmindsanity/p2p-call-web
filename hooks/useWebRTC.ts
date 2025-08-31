@@ -1,3 +1,4 @@
+
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { STUN_SERVERS } from '../constants';
 import { CallState, CallStats, PinnedEntry } from '../types';
@@ -36,20 +37,25 @@ export const useWebRTC = () => {
   const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastStatsRef = useRef<{ timestamp: number, totalBytesSent: number, totalBytesReceived: number } | null>(null);
 
-  const updateLocalStream = (stream: MediaStream | null) => {
-    localStreamRef.current = stream;
-    setLocalStream(stream);
-  };
+  // FIX: Use a useEffect to keep the ref in sync with the state. This is a robust pattern
+  // to ensure that callbacks always have access to the latest stream via the ref,
+  // preventing stale closures.
+  useEffect(() => {
+    localStreamRef.current = localStream;
+  }, [localStream]);
 
   const cleanUp = useCallback((keepCallDoc = false) => {
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
+    
+    // Use the ref to stop tracks, as it's guaranteed to be the most current stream
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
-      updateLocalStream(null);
     }
+    setLocalStream(null); // This will trigger the useEffect to null out the ref
+
     if(remoteStream) {
       remoteStream.getTracks().forEach(track => track.stop());
       setRemoteStream(null);
@@ -125,7 +131,7 @@ export const useWebRTC = () => {
       // Set initial mute/video state from component state, in case it was toggled in the lobby
       stream.getAudioTracks().forEach(t => t.enabled = !isMuted);
       stream.getVideoTracks().forEach(t => t.enabled = !isVideoOff);
-      updateLocalStream(stream);
+      setLocalStream(stream);
       return stream;
     } catch (error) {
       console.error('Error accessing media devices.', error);
