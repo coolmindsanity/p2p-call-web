@@ -132,14 +132,11 @@ const Lobby: React.FC<LobbyProps> = ({
               appearance: none;
               width: 120px;
               height: 4px;
-              background: rgba(203, 213, 225, 0.7); /* slate-300 */
+              background: rgba(55, 65, 81, 0.7); /* gray-600 */
               border-radius: 2px;
               outline: none;
               transform: rotate(-90deg);
               transform-origin: 60px 60px;
-            }
-            .dark .zoom-slider {
-              background: rgba(55, 65, 81, 0.7); /* gray-600 */
             }
             .zoom-slider::-webkit-slider-thumb {
               -webkit-appearance: none;
@@ -160,12 +157,12 @@ const Lobby: React.FC<LobbyProps> = ({
               cursor: ns-resize;
             }
         `}</style>
-        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-2 text-center">Ready to join?</h1>
-        <p className="text-gray-500 dark:text-gray-400 mb-2 text-center">Check your camera and microphone before starting.</p>
-        <p className="desktop-instruction text-gray-500 dark:text-gray-400 text-sm mb-4 text-center">
+        <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 text-center">Ready to join?</h1>
+        <p className="text-gray-400 mb-2 text-center">Check your camera and microphone before starting.</p>
+        <p className="desktop-instruction text-gray-400 text-sm mb-4 text-center">
             Use the slider to adjust your video zoom.
         </p>
-        <p className="touch-instruction text-gray-500 dark:text-gray-400 text-sm mb-4 text-center">
+        <p className="touch-instruction text-gray-400 text-sm mb-4 text-center">
             Use two fingers to pinch and zoom the video.
         </p>
 
@@ -175,7 +172,7 @@ const Lobby: React.FC<LobbyProps> = ({
                     onTouchStart={onTouchStart}
                     onTouchMove={onTouchMove}
                     onTouchEnd={onTouchEnd}
-                    className="w-full max-w-2xl aspect-video rounded-xl overflow-hidden bg-slate-200 dark:bg-gray-800 shadow-lg border-2 border-slate-300 dark:border-gray-700 relative cursor-grab touch-none"
+                    className="w-full max-w-2xl aspect-video rounded-xl overflow-hidden bg-gray-800 shadow-lg ring-2 ring-offset-4 ring-offset-gray-950 ring-indigo-500 relative cursor-grab touch-none"
                 >
                     <VideoPlayer
                         stream={localStream}
@@ -193,19 +190,19 @@ const Lobby: React.FC<LobbyProps> = ({
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3">
                         <button 
                             onClick={onToggleMute} 
-                            className={`p-3 rounded-full transition-colors ${isMuted ? 'bg-amber-500 hover:bg-amber-600' : 'bg-slate-300 hover:bg-slate-400/80 dark:bg-gray-800/60 dark:hover:bg-gray-700/80 backdrop-blur-sm'}`}
+                            className={`p-3 rounded-full transition-colors ${isMuted ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-800/60 hover:bg-gray-700/80 backdrop-blur-sm'}`}
                             aria-label={isMuted ? 'Unmute' : 'Mute'}
                             title={isMuted ? 'Unmute' : 'Mute'}
                         >
-                            {isMuted ? <UnmuteIcon className="w-6 h-6 text-white"/> : <MuteIcon className="w-6 h-6 text-slate-800 dark:text-white" />}
+                            {isMuted ? <UnmuteIcon className="w-6 h-6 text-white"/> : <MuteIcon className="w-6 h-6 text-white" />}
                         </button>
                         <button 
                             onClick={onToggleVideo} 
-                            className={`p-3 rounded-full transition-colors ${isVideoOff ? 'bg-amber-500 hover:bg-amber-600' : 'bg-slate-300 hover:bg-slate-400/80 dark:bg-gray-800/60 dark:hover:bg-gray-700/80 backdrop-blur-sm'}`}
+                            className={`p-3 rounded-full transition-colors ${isVideoOff ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-800/60 hover:bg-gray-700/80 backdrop-blur-sm'}`}
                             aria-label={isVideoOff ? 'Turn video on' : 'Turn video off'}
                             title={isVideoOff ? 'Turn video on' : 'Turn video off'}
                         >
-                            {isVideoOff ? <VideoOffIcon className="w-6 h-6 text-white"/> : <VideoOnIcon className="w-6 h-6 text-slate-800 dark:text-white" />}
+                            {isVideoOff ? <VideoOffIcon className="w-6 h-6 text-white"/> : <VideoOnIcon className="w-6 h-6 text-white" />}
                         </button>
                     </div>
                 </div>
@@ -234,13 +231,13 @@ const Lobby: React.FC<LobbyProps> = ({
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full max-w-md">
             <button 
                 onClick={handleCancel} 
-                className="w-full px-6 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-slate-800 dark:text-white rounded-lg font-semibold transition-colors order-2 sm:order-1"
+                className="w-full px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold transition-colors order-2 sm:order-1"
             >
                 Back
             </button>
             <button 
                 onClick={handleConfirm} 
-                className="w-full px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-gradient-to-r dark:from-indigo-500 dark:to-indigo-600 dark:hover:from-indigo-600 dark:hover:to-indigo-700 rounded-lg font-semibold transition-transform transform hover:scale-105 order-1 sm:order-2"
+                className="w-full px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-transform transform hover:scale-105 order-1 sm:order-2 shadow-lg"
             >
                 Join Now
             </button>

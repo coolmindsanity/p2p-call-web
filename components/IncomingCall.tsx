@@ -23,10 +23,10 @@ const DeclineIcon: React.FC<{className?: string}> = ({className}) => (
 
 const IncomingCall: React.FC<IncomingCallProps> = ({ callInfo, callerDisplayName, onAccept, onDecline }) => {
   return (
-    <div className="absolute inset-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md flex flex-col items-center justify-center gap-8 z-50 animate-fade-in" role="alertdialog" aria-labelledby="incoming-call-title">
+    <div className="absolute inset-0 bg-gray-950/80 backdrop-blur-2xl flex flex-col items-center justify-center gap-8 z-50 animate-fade-in" role="alertdialog" aria-labelledby="incoming-call-title">
         <div className="text-center">
-            <h2 id="incoming-call-title" className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">Incoming Call</h2>
-            <p className="text-xl text-slate-700 dark:text-gray-300 mt-2">{callerDisplayName}</p>
+            <h2 id="incoming-call-title" className="text-3xl font-bold text-indigo-400">Incoming Call</h2>
+            <p className="text-xl text-gray-300 mt-2">{callerDisplayName}</p>
         </div>
 
         <div className="flex items-center gap-8">
@@ -38,7 +38,7 @@ const IncomingCall: React.FC<IncomingCallProps> = ({ callInfo, callerDisplayName
                 >
                     <DeclineIcon className="w-10 h-10 text-white" />
                 </button>
-                <span className="font-semibold text-slate-800 dark:text-white">Decline</span>
+                <span className="font-semibold text-white">Decline</span>
             </div>
             <div className="flex flex-col items-center gap-2">
                 <button
@@ -48,7 +48,7 @@ const IncomingCall: React.FC<IncomingCallProps> = ({ callInfo, callerDisplayName
                 >
                     <AcceptIcon className="w-10 h-10 text-white" />
                 </button>
-                <span className="font-semibold text-slate-800 dark:text-white">Accept</span>
+                <span className="font-semibold text-white">Accept</span>
             </div>
         </div>
         <style>{`

@@ -42,6 +42,7 @@ export const useWebRTC = (initialResolution: string) => {
   const ringingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastStatsRef = useRef<{ timestamp: number, totalBytesSent: number, totalBytesReceived: number } | null>(null);
+  const hasConnectedOnceRef = useRef(false);
 
   // FIX: Use a useEffect to keep the ref in sync with the state. This is a robust pattern
   // to ensure that callbacks always have access to the latest stream via the ref,
@@ -88,6 +89,7 @@ export const useWebRTC = (initialResolution: string) => {
     offerCandidatesRef.current = null;
     encryptionKeyRef.current = null;
     lastStatsRef.current = null;
+    hasConnectedOnceRef.current = false;
     setIsE2EEActive(false);
     setCallStats(null);
   }, [remoteStream]);
@@ -216,6 +218,7 @@ export const useWebRTC = (initialResolution: string) => {
         setConnectionState(pc.connectionState);
 
         if (pc.connectionState === 'connected') {
+          hasConnectedOnceRef.current = true;
           if (ringingTimeoutRef.current) clearTimeout(ringingTimeoutRef.current);
           reconnectionAttemptsRef.current = 0; // Reset attempts on successful connection
           if (reconnectionTimerRef.current) {
@@ -485,10 +488,15 @@ export const useWebRTC = (initialResolution: string) => {
               }
               return;
           }
-          // FIX: The original check `pc.remoteDescription?.sdp !== data.offer.sdp` could incorrectly
-          // trigger a reconnect if `pc.remoteDescription` was null when the listener first fired.
-          // This new condition is safer and correctly handles both the initial state and subsequent updates.
+          
           if (data?.offer && (!pc.remoteDescription || pc.remoteDescription.sdp !== data.offer.sdp)) {
+              // FIX: Only process subsequent offers for reconnection, not the initial one.
+              // The `hasConnectedOnceRef` flag is set only when the connection state first becomes 'connected',
+              // preventing this listener from incorrectly triggering a reconnect on the initial join.
+              if (!hasConnectedOnceRef.current) {
+                  return;
+              }
+
               console.log("Received a new offer for reconnection.");
               setCallState(CallState.RECONNECTING);
               await pc.setRemoteDescription(new RTCSessionDescription(data.offer));

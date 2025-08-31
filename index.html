@@ -8,9 +8,74 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
-        darkMode: 'class'
+        darkMode: 'class', // The app is now always in dark mode per the design.
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', '"Noto Sans"', 'sans-serif', '"Apple Color Emoji"', '"Segoe UI Emoji"', '"Segoe UI Symbol"', '"Noto Color Emoji"'],
+            },
+            animation: {
+              'fade-in-down': 'fade-in-down 0.5s ease-out forwards',
+              'pop': 'pop 0.4s ease-out',
+            },
+            keyframes: {
+              'fade-in-down': {
+                '0%': { opacity: '0', transform: 'translateY(-10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              'pop': {
+                  '0%, 100%': { transform: 'scale(1)' },
+                  '50%': { transform: 'scale(1.3)' },
+              }
+            },
+          }
+        }
       }
     </script>
+    <style>
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: rgba(107, 114, 128, 0.5); /* gray-500 with opacity */
+        border-radius: 20px;
+        border: transparent;
+      }
+      /* Dark grid background from the target image */
+      body {
+        background-color: #0d1117;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 2rem 2rem;
+      }
+      .animate-fade-in-down {
+        animation: fade-in-down 0.5s ease-out forwards;
+        opacity: 0;
+      }
+      .animate-pop {
+        animation: pop 0.4s ease-out;
+      }
+
+      /* Style for the glowing effect on the glass container */
+      .glass-container-glow::after {
+        content: '';
+        position: absolute;
+        z-index: -1;
+        top: 50%;
+        left: 50%;
+        width: 125%;
+        height: 125%;
+        transform: translate(-50%, -50%);
+        border-radius: inherit;
+        background: radial-gradient(circle at 75% 25%, rgba(16, 185, 129, 0.5) 0%, rgba(56, 189, 248, 0.35) 25%, transparent 60%);
+        filter: blur(80px);
+        opacity: 1;
+      }
+    </style>
   <script type="importmap">
 {
   "imports": {
@@ -21,7 +86,7 @@
 }
 </script>
 </head>
-  <body class="bg-slate-50 dark:bg-gray-900 text-slate-800 dark:text-white antialiased transition-colors duration-300">
+  <body class="dark bg-gray-950 text-slate-200 antialiased font-sans">
     <div id="root"></div>
     <!-- Firebase SDKs for signaling -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>

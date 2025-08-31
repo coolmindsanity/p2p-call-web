@@ -72,10 +72,10 @@ const CallHistory: React.FC<CallHistoryProps> = ({ history, onRejoin, onUpdateAl
 
   if (history.length === 0) {
     return (
-        <div className="w-full text-center py-10 px-4 bg-white/70 dark:bg-gray-800/70 rounded-lg">
-            <HistoryIcon className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-600" />
-            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mt-4">No Recent Calls</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Your call history will appear here after you make a call.</p>
+        <div className="w-full text-center py-10 px-4">
+            <HistoryIcon className="w-12 h-12 mx-auto text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-300 mt-4">No Recent Calls</h3>
+            <p className="text-sm text-gray-500 mt-2">Your call history will appear here after you make a call.</p>
         </div>
     );
   }
@@ -113,14 +113,14 @@ const CallHistory: React.FC<CallHistoryProps> = ({ history, onRejoin, onUpdateAl
   };
 
   return (
-    <div className="w-full max-w-sm">
-      <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar" role="list">
+    <div className="w-full">
+      <div className="space-y-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar" role="list">
         {history.map((call, index) => {
           const isPinned = pinnedIds.has(call.callId);
           return (
             <div 
               key={`${call.callId}-${call.timestamp}`} 
-              className="bg-white dark:bg-gray-800/70 p-3 rounded-lg flex items-center justify-between gap-3 min-h-[70px] hover:bg-slate-50 dark:hover:bg-gray-700/80 transition-colors animate-fade-in-down shadow-sm"
+              className="bg-gray-800/50 p-3 rounded-lg flex items-center justify-between gap-3 min-h-[70px] hover:bg-gray-700/80 transition-colors duration-200 border border-gray-700 animate-fade-in-down"
               style={{ animationDelay: `${index * 50}ms`, opacity: 0 }}
               role="listitem"
             >
@@ -132,7 +132,7 @@ const CallHistory: React.FC<CallHistoryProps> = ({ history, onRejoin, onUpdateAl
                     onChange={(e) => setAliasInput(e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, call.timestamp)}
                     placeholder="Enter alias (e.g., Bob)"
-                    className="flex-grow px-3 py-1.5 bg-slate-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    className="flex-grow px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                     autoFocus
                     aria-label="Edit alias for call"
                   />
@@ -146,7 +146,7 @@ const CallHistory: React.FC<CallHistoryProps> = ({ history, onRejoin, onUpdateAl
                   </button>
                   <button
                     onClick={handleCancelClick}
-                    className="p-2 bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md transition-colors flex-shrink-0"
+                    className="p-2 bg-gray-600 hover:bg-gray-500 rounded-md transition-colors flex-shrink-0"
                     aria-label="Cancel editing alias"
                     title="Cancel"
                   >
@@ -158,14 +158,14 @@ const CallHistory: React.FC<CallHistoryProps> = ({ history, onRejoin, onUpdateAl
                   <div className="truncate flex-grow flex items-center gap-3">
                     {call.peerId && (
                       <div className="flex-shrink-0" title="This contact can be called directly">
-                        <UserIcon className="w-6 h-6 text-indigo-500 dark:text-indigo-400" />
+                        <UserIcon className="w-6 h-6 text-indigo-400" />
                       </div>
                     )}
                     <div className="truncate flex-grow">
-                      <p className="font-semibold text-base text-slate-800 dark:text-gray-100 truncate" title={call.alias || call.callId}>
+                      <p className="font-semibold text-base text-gray-100 truncate" title={call.alias || call.callId}>
                         {call.alias || call.callId}
                       </p>
-                      <p className="text-xs text-slate-500 dark:text-gray-400 truncate">
+                      <p className="text-xs text-gray-400 truncate">
                         {call.alias && <span className="font-mono">{call.callId} &middot; </span>}
                         {formatDate(call.timestamp)} &middot; {formatTime(call.duration)}
                       </p>
@@ -174,7 +174,7 @@ const CallHistory: React.FC<CallHistoryProps> = ({ history, onRejoin, onUpdateAl
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                         onClick={() => handlePinClick(call)}
-                        className={`p-2 rounded-md transition-colors ${isPinned ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-400 hover:text-slate-800 dark:hover:text-white'} hover:bg-slate-200 dark:hover:bg-gray-700`}
+                        className={`p-2 rounded-full transition-colors ${isPinned ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-400 hover:text-white'} hover:bg-gray-700`}
                         aria-label={isPinned ? `Unpin call with ID ${call.callId}` : `Pin call with ID ${call.callId}`}
                         title={isPinned ? 'Unpin' : 'Pin'}
                     >
@@ -182,7 +182,7 @@ const CallHistory: React.FC<CallHistoryProps> = ({ history, onRejoin, onUpdateAl
                     </button>
                     <button
                       onClick={() => handleEditClick(call)}
-                      className="p-2 text-gray-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors"
                       aria-label={`Edit alias for call with ID ${call.callId}`}
                       title="Edit alias"
                     >
@@ -190,7 +190,7 @@ const CallHistory: React.FC<CallHistoryProps> = ({ history, onRejoin, onUpdateAl
                     </button>
                     <button
                       onClick={() => onDelete(call.timestamp)}
-                      className="p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-200 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded-full transition-colors"
                       aria-label={`Delete call with ID ${call.callId} from history`}
                       title="Delete from history"
                     >
@@ -198,7 +198,7 @@ const CallHistory: React.FC<CallHistoryProps> = ({ history, onRejoin, onUpdateAl
                     </button>
                     <button
                       onClick={() => onRejoin(call.callId)}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-semibold whitespace-nowrap flex items-center gap-1.5 transition-transform transform hover:scale-105"
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-sm font-semibold whitespace-nowrap flex items-center gap-1.5 transition-colors"
                       aria-label={`Rejoin call with ID ${call.callId}`}
                     >
                       <RejoinIcon className="w-4 h-4" />
