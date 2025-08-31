@@ -23,6 +23,7 @@ export const useWebRTC = () => {
   const [callStats, setCallStats] = useState<CallStats | null>(null);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
   const encryptionKeyRef = useRef<CryptoKey | null>(null);
   const callDocRef = useRef<any>(null); // Firebase Database Reference
   const answerCandidatesRef = useRef<any>(null); // Firebase Database Reference
@@ -35,14 +36,19 @@ export const useWebRTC = () => {
   const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastStatsRef = useRef<{ timestamp: number, totalBytesSent: number, totalBytesReceived: number } | null>(null);
 
+  const updateLocalStream = (stream: MediaStream | null) => {
+    localStreamRef.current = stream;
+    setLocalStream(stream);
+  };
+
   const cleanUp = useCallback((keepCallDoc = false) => {
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
-      setLocalStream(null);
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      updateLocalStream(null);
     }
     if(remoteStream) {
       remoteStream.getTracks().forEach(track => track.stop());
@@ -72,7 +78,7 @@ export const useWebRTC = () => {
     lastStatsRef.current = null;
     setIsE2EEActive(false);
     setCallStats(null);
-  }, [localStream, remoteStream]);
+  }, [remoteStream]);
 
   const hangUp = useCallback(() => {
     cleanUp();
@@ -119,7 +125,7 @@ export const useWebRTC = () => {
       // Set initial mute/video state from component state, in case it was toggled in the lobby
       stream.getAudioTracks().forEach(t => t.enabled = !isMuted);
       stream.getVideoTracks().forEach(t => t.enabled = !isVideoOff);
-      setLocalStream(stream);
+      updateLocalStream(stream);
       return stream;
     } catch (error) {
       console.error('Error accessing media devices.', error);
@@ -271,7 +277,7 @@ export const useWebRTC = () => {
   }, [restartIce, hangUp, callState]);
 
   const initiateCall = useCallback(async (id: string, isRinging: boolean = false) => {
-    if (!localStream) {
+    if (!localStreamRef.current) {
         console.error("Cannot initiate call without a local stream.");
         setCallState(CallState.MEDIA_ERROR);
         return;
@@ -284,7 +290,7 @@ export const useWebRTC = () => {
     const { key, rawKey } = await generateKey();
     encryptionKeyRef.current = key;
 
-    const pc = createPeerConnection(localStream);
+    const pc = createPeerConnection(localStreamRef.current);
     setCallId(id);
 
     callDocRef.current = db.ref(`calls/${id}`);
@@ -341,7 +347,7 @@ export const useWebRTC = () => {
       setCallState(CallState.WAITING_FOR_ANSWER);
     }
     
-  }, [createPeerConnection, hangUp, callState, peerId, cleanUp, localStream]);
+  }, [createPeerConnection, hangUp, callState, peerId, cleanUp]);
 
   const ringUser = useCallback(async (peer: PinnedEntry) => {
     if (!peer.peerId) {
@@ -385,7 +391,7 @@ export const useWebRTC = () => {
       
     // If the call document exists and has an offer, we are joining.
     if (callData?.offer) {
-      if (!localStream) {
+      if (!localStreamRef.current) {
         console.error("Cannot join call without a local stream.");
         setCallState(CallState.MEDIA_ERROR);
         return;
@@ -404,7 +410,7 @@ export const useWebRTC = () => {
         console.warn("Call does not support E2EE: encryption key is missing from signaling data.");
       }
       
-      const pc = createPeerConnection(localStream);
+      const pc = createPeerConnection(localStreamRef.current);
       setCallId(id);
 
       callDocRef.current = callRef;
@@ -469,25 +475,25 @@ export const useWebRTC = () => {
         console.log(`Call ID "${id}" is available. Initializing a new call.`);
         await initiateCall(id);
     }
-  }, [createPeerConnection, hangUp, initiateCall, callState, localStream]);
+  }, [createPeerConnection, hangUp, initiateCall, callState]);
 
   const toggleMute = useCallback(() => {
-    if (localStream) {
-      localStream.getAudioTracks().forEach(track => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach(track => {
         track.enabled = !track.enabled;
       });
       setIsMuted(prev => !prev);
     }
-  }, [localStream]);
+  }, []);
 
   const toggleVideo = useCallback(() => {
-    if (localStream) {
-      localStream.getVideoTracks().forEach(track => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getVideoTracks().forEach(track => {
         track.enabled = !track.enabled;
       });
       setIsVideoOff(prev => !prev);
     }
-  }, [localStream]);
+  }, []);
 
   useEffect(() => {
     // Add a beforeunload listener to hang up the call

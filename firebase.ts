@@ -24,3 +24,4 @@ const app = (window as any).firebase.initializeApp(firebaseConfig);
 
 // Get a reference to the Realtime Database service
 export const db = (window as any).firebase.database();
+export const ServerValue = (window as any).firebase.database.ServerValue;

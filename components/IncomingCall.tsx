@@ -3,6 +3,7 @@ import { IncomingCall } from '../types';
 
 interface IncomingCallProps {
   callInfo: IncomingCall;
+  callerDisplayName: string;
   onAccept: () => void;
   onDecline: () => void;
 }
@@ -20,9 +21,7 @@ const DeclineIcon: React.FC<{className?: string}> = ({className}) => (
 );
 
 
-const IncomingCall: React.FC<IncomingCallProps> = ({ callInfo, onAccept, onDecline }) => {
-  const callerDisplayName = callInfo.callerAlias || callInfo.from.substring(0, 8) + '...';
-
+const IncomingCall: React.FC<IncomingCallProps> = ({ callInfo, callerDisplayName, onAccept, onDecline }) => {
   return (
     <div className="absolute inset-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md flex flex-col items-center justify-center gap-8 z-50 animate-fade-in" role="alertdialog" aria-labelledby="incoming-call-title">
         <div className="text-center">

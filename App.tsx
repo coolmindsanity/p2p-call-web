@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
-import { CallState, CallHistoryEntry, PinnedEntry, CallStats, IncomingCall } from './types';
+import { CallState, CallHistoryEntry, PinnedEntry, CallStats, IncomingCall, PeerStatus } from './types';
 import VideoPlayer from './components/VideoPlayer';
 import Controls from './components/Controls';
 import ConnectionManager from './components/ConnectionManager';
@@ -18,6 +18,8 @@ import { db } from './firebase';
 import { formatTime } from './utils/format';
 import { useDraggable } from './hooks/useDraggable';
 import { usePinchToZoom } from './hooks/usePinchToZoom';
+import { usePresence } from './hooks/usePresence';
+import { usePeerStatus } from './hooks/usePeerStatus';
 
 const UnmuteIcon: React.FC<{className?: string}> = ({className}) => (
  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -257,6 +259,11 @@ const App: React.FC = () => {
   const { zoom, setZoom, resetZoom, isPinching, onTouchStart, onTouchMove, onTouchEnd } = usePinchToZoom();
   const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   
+  // Custom hooks for presence
+  usePresence(userId);
+  const peerIds = useMemo(() => pinned.map(p => p.peerId).filter(Boolean) as string[], [pinned]);
+  const peerStatus = usePeerStatus(peerIds);
+
   useEffect(() => {
     // When the active tab changes, calculate the new position for the indicator.
     const activeTabElement = tabsRef.current?.querySelector(`[data-tab-id="${activeTab}"]`);
@@ -696,6 +703,7 @@ const App: React.FC = () => {
             {activeTab === 'pinned' && (
               <PinnedCalls 
                 pins={pinned}
+                peerStatus={peerStatus}
                 onCall={handleCall}
                 onUpdateAlias={handleUpdatePinnedAlias}
                 onUnpin={handleUnpin}
@@ -740,7 +748,16 @@ const App: React.FC = () => {
     switch (callState) {
       case CallState.INCOMING_CALL:
           if (!incomingCall) return renderIdleContent();
-          return <IncomingCallScreen callInfo={incomingCall} onAccept={handleAcceptCall} onDecline={handleDeclineCall} />;
+          const callerPin = pinned.find(p => p.peerId === incomingCall.from);
+          // Prioritize the alias you have set for them, then the alias they have set for themselves, then a fallback.
+          const callerDisplayName = callerPin?.alias || incomingCall.callerAlias || incomingCall.from.substring(0, 8) + '...';
+          
+          return <IncomingCallScreen 
+            callInfo={incomingCall}
+            callerDisplayName={callerDisplayName} 
+            onAccept={handleAcceptCall} 
+            onDecline={handleDeclineCall} 
+           />;
       case CallState.LOBBY:
         return (
             <Lobby

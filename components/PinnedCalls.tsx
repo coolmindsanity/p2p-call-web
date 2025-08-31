@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { PinnedEntry } from '../types';
+import { PinnedEntry, PeerStatus } from '../types';
 
 interface PinnedCallsProps {
   pins: PinnedEntry[];
+  peerStatus: { [key: string]: PeerStatus };
   onCall: (pin: PinnedEntry) => void;
   onUpdateAlias: (callId: string, alias: string) => void;
   onUnpin: (callId: string) => void;
@@ -39,7 +40,7 @@ const PinEmptyIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
-const PinnedCalls: React.FC<PinnedCallsProps> = ({ pins, onCall, onUpdateAlias, onUnpin }) => {
+const PinnedCalls: React.FC<PinnedCallsProps> = ({ pins, peerStatus, onCall, onUpdateAlias, onUnpin }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [aliasInput, setAliasInput] = useState('');
 
@@ -79,83 +80,98 @@ const PinnedCalls: React.FC<PinnedCallsProps> = ({ pins, onCall, onUpdateAlias, 
 
   return (
     <div className="w-full max-w-sm space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar" role="list">
-        {pins.map((pin, index) => (
-          <div 
-            key={pin.callId} 
-            className="bg-white dark:bg-gray-800/70 p-3 rounded-lg flex items-center justify-between gap-3 min-h-[70px] hover:bg-slate-50 dark:hover:bg-gray-700/80 transition-colors animate-fade-in-down shadow-sm"
-            style={{ animationDelay: `${index * 50}ms`, opacity: 0 }}
-            role="listitem"
-          >
-            {editingId === pin.callId ? (
-              <div className="w-full flex items-center gap-2">
-                <input
-                  type="text"
-                  value={aliasInput}
-                  onChange={(e) => setAliasInput(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, pin.callId)}
-                  placeholder="Enter alias..."
-                  className="flex-grow px-3 py-1.5 bg-slate-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                  autoFocus
-                  aria-label="Edit alias for pinned call"
-                />
-                <button
-                  onClick={() => handleSaveClick(pin.callId)}
-                  className="p-2 bg-green-600 hover:bg-green-700 rounded-md transition-colors flex-shrink-0"
-                  aria-label="Save alias"
-                  title="Save"
-                >
-                  <CheckIcon className="w-4 h-4 text-white" />
-                </button>
-                <button
-                  onClick={handleCancelClick}
-                  className="p-2 bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md transition-colors flex-shrink-0"
-                  aria-label="Cancel editing alias"
-                  title="Cancel"
-                >
-                  <CancelIcon className="w-4 h-4 text-white" />
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="truncate flex-grow">
-                  <p className="font-semibold text-base text-slate-800 dark:text-gray-100 truncate" title={pin.alias || pin.callId}>
-                    {pin.alias || pin.callId}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-gray-400 font-mono truncate" title={pin.peerId ? `User ID: ${pin.peerId}`: `Call ID: ${pin.callId}`}>
-                     {pin.peerId ? `User ID: ${pin.peerId.substring(0,8)}...` : `Call ID: ${pin.callId}`}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
+        {pins.map((pin, index) => {
+          const status = pin.peerId ? peerStatus[pin.peerId] : null;
+          const isOnline = status?.isOnline === true;
+          const canCallDirectly = !!pin.peerId;
+          const isButtonDisabled = canCallDirectly && !isOnline;
+
+          return (
+            <div 
+              key={pin.callId} 
+              className="bg-white dark:bg-gray-800/70 p-3 rounded-lg flex items-center justify-between gap-3 min-h-[70px] hover:bg-slate-50 dark:hover:bg-gray-700/80 transition-colors animate-fade-in-down shadow-sm"
+              style={{ animationDelay: `${index * 50}ms`, opacity: 0 }}
+              role="listitem"
+            >
+              {editingId === pin.callId ? (
+                <div className="w-full flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={aliasInput}
+                    onChange={(e) => setAliasInput(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, pin.callId)}
+                    placeholder="Enter alias..."
+                    className="flex-grow px-3 py-1.5 bg-slate-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    autoFocus
+                    aria-label="Edit alias for pinned call"
+                  />
                   <button
-                    onClick={() => onUnpin(pin.callId)}
-                    className="p-2 text-yellow-500 dark:text-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-300 hover:bg-slate-200 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    aria-label={`Unpin call with ID ${pin.callId}`}
-                    title="Unpin"
+                    onClick={() => handleSaveClick(pin.callId)}
+                    className="p-2 bg-green-600 hover:bg-green-700 rounded-md transition-colors flex-shrink-0"
+                    aria-label="Save alias"
+                    title="Save"
                   >
-                    <UnpinIcon className="w-5 h-5" />
+                    <CheckIcon className="w-4 h-4 text-white" />
                   </button>
                   <button
-                    onClick={() => handleEditClick(pin)}
-                    className="p-2 text-gray-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    aria-label={`Edit alias for pinned call with ID ${pin.callId}`}
-                    title="Edit alias"
+                    onClick={handleCancelClick}
+                    className="p-2 bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md transition-colors flex-shrink-0"
+                    aria-label="Cancel editing alias"
+                    title="Cancel"
                   >
-                    <EditIcon className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => onCall(pin)}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold text-white whitespace-nowrap flex items-center gap-1.5 transition-transform transform hover:scale-105"
-                    aria-label={`Call ${pin.alias || pin.callId}`}
-                    title={pin.peerId ? `Call ${pin.alias || 'user'}`: `Rejoin call room`}
-                  >
-                    <CallIcon className="w-4 h-4" />
-                    Call
+                    <CancelIcon className="w-4 h-4 text-white" />
                   </button>
                 </div>
-              </>
-            )}
-          </div>
-        ))}
+              ) : (
+                <>
+                  <div className="truncate flex-grow flex items-center gap-3">
+                     {canCallDirectly && (
+                        <div className="flex-shrink-0 w-2 h-2 rounded-full"
+                          title={isOnline ? 'Online' : 'Offline'}
+                          style={{ backgroundColor: isOnline ? '#22c55e' : '#9ca3af' }} // green-500 or gray-400
+                        ></div>
+                      )}
+                    <div className="truncate">
+                      <p className="font-semibold text-base text-slate-800 dark:text-gray-100 truncate" title={pin.alias || pin.callId}>
+                        {pin.alias || pin.callId}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-gray-400 font-mono truncate" title={pin.peerId ? `User ID: ${pin.peerId}`: `Call ID: ${pin.callId}`}>
+                        {pin.peerId ? `User ID: ${pin.peerId.substring(0,8)}...` : `Call ID: ${pin.callId}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => onUnpin(pin.callId)}
+                      className="p-2 text-yellow-500 dark:text-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-300 hover:bg-slate-200 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      aria-label={`Unpin call with ID ${pin.callId}`}
+                      title="Unpin"
+                    >
+                      <UnpinIcon className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => handleEditClick(pin)}
+                      className="p-2 text-gray-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      aria-label={`Edit alias for pinned call with ID ${pin.callId}`}
+                      title="Edit alias"
+                    >
+                      <EditIcon className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => onCall(pin)}
+                      disabled={isButtonDisabled}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm font-semibold text-white whitespace-nowrap flex items-center gap-1.5 transition-all transform hover:scale-105 disabled:bg-gray-400 dark:disabled:bg-gray-700 disabled:text-gray-300 dark:disabled:text-gray-400 disabled:cursor-not-allowed disabled:transform-none"
+                      aria-label={`Call ${pin.alias || pin.callId}`}
+                      title={isButtonDisabled ? "User is offline" : (pin.peerId ? `Call ${pin.alias || 'user'}`: `Rejoin call room`)}
+                    >
+                      <CallIcon className="w-4 h-4" />
+                      {pin.peerId ? 'Call' : 'Rejoin'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+        )})}
     </div>
   );
 };

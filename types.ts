@@ -41,3 +41,8 @@ export interface IncomingCall {
     callId: string;
     callerAlias?: string; // Alias the caller has for you
 }
+
+export interface PeerStatus {
+  isOnline: boolean;
+  lastChanged: number;
+}
