@@ -13,6 +13,7 @@ import Lobby from './components/Lobby';
 import MediaErrorScreen from './components/MediaErrorScreen';
 import ChatPanel from './components/ChatPanel';
 import FloatingVideo from './components/FloatingVideo';
+import LocalVideoPreview from './components/LocalVideoPreview';
 import { playIncomingSound, playConnectedSound, playEndedSound, playRingingSound, stopRingingSound } from './utils/sounds';
 import { getHistory, saveHistory } from './utils/history';
 import { getPinned, savePinned } from './utils/pins';
@@ -22,20 +23,6 @@ import { formatTime } from './utils/format';
 import { useDraggable } from './hooks/useDraggable';
 import { usePresence } from './hooks/usePresence';
 import { usePeerStatus } from './hooks/usePeerStatus';
-
-const UnmuteIcon: React.FC<{className?: string}> = ({className}) => (
- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M13.5 4.06c0-1.336-1.076-2.412-2.411-2.412A2.412 2.412 0 0 0 8.677 4.06v8.682a2.412 2.412 0 0 0 4.823 0V4.06Z" />
-    <path d="M6 10.5a.75.75 0 0 1 .75.75v.75a4.5 4.5 0 0 0 9 0v-.75a.75.75 0 0 1 1.5 0v.75a6 6 0 1 1-12 0v-.75a.75.75 0 0 1 .75-.75Z" />
-    <path fillRule="evenodd" d="M2.023 2.023a.75.75 0 0 1 1.06 0L21.977 20.92a.75.75 0 1 1-1.06 1.06L2.023 3.083a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
-</svg>
-);
-
-const VideoOffIcon: React.FC<{className?: string}> = ({className}) => (
- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M3.53 3.53a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 0 0 1.06-1.06l-18-18ZM20.25 11.625l1.58-1.58a1.5 1.5 0 0 0-1.06-2.56L18 8.935V7.5a3 3 0 0 0-3-3h-2.25l-1.822-1.823a.75.75 0 0 0-1.06 0l-.146.147-1.125 1.125a.75.75 0 0 0 0 1.06l.12.12L12 8.25V7.5h3v3.75l-4.28 4.28-.625.625a.75.75 0 0 0 0 1.06l.625.625 4.28 4.28V16.5h.75a3 3 0 0 0 3-3V11.625ZM4.5 19.5h8.25a3 3 0 0 0 3-3V13.125l-3.375-3.375L9 13.125v3.375h-3v-3.375l-.375-.375-1.5-1.5V16.5a3 3 0 0 0 3 3Z" />
-</svg>
-);
 
 const App: React.FC = () => {
     const [userId] = useState(getUserId());
@@ -71,6 +58,7 @@ const App: React.FC = () => {
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const callStartTimeRef = useRef<number | null>(null);
     const callDetailsForHistoryRef = useRef<{ callId: string; peerId?: string; alias?: string } | null>(null);
+    const hasConnectedOnceForChatRef = useRef(false);
 
     const validateCallId = useCallback((id: string): boolean => {
         const trimmedId = id.trim();
@@ -137,6 +125,11 @@ const App: React.FC = () => {
             case CallState.CONNECTED:
                 stopRingingSound();
                 playConnectedSound();
+                 // Only hide the chat panel on the initial connection, not on reconnects.
+                if (!hasConnectedOnceForChatRef.current) {
+                    setIsChatVisible(false);
+                    hasConnectedOnceForChatRef.current = true;
+                }
                 callStartTimeRef.current = Date.now();
                 if (callId) {
                     callDetailsForHistoryRef.current = { callId, peerId: peerId || undefined, alias: peerId ? findAlias(peerId) : undefined };
@@ -164,6 +157,7 @@ const App: React.FC = () => {
                 timerRef.current = null;
                 callStartTimeRef.current = null;
                 callDetailsForHistoryRef.current = null;
+                hasConnectedOnceForChatRef.current = false; // Reset for the next call
                 break;
             case CallState.IDLE:
                 stopRingingSound();
@@ -491,15 +485,11 @@ const App: React.FC = () => {
                         isRemoteMuted={isRemoteMuted}
                         isRemoteVideoOff={isRemoteVideoOff}
                     />
-                    <div className="absolute bottom-6 right-6 w-32 h-auto md:w-48 aspect-video rounded-lg overflow-hidden shadow-lg border-2 border-white/20">
-                        <VideoPlayer stream={localStream} muted={true} />
-                        {(isMuted || isVideoOff) && (
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center gap-2">
-                                {isMuted && <UnmuteIcon className="w-6 h-6 text-white" />}
-                                {isVideoOff && <VideoOffIcon className="w-6 h-6 text-white" />}
-                            </div>
-                        )}
-                    </div>
+                    <LocalVideoPreview
+                        stream={localStream}
+                        isMuted={isMuted}
+                        isVideoOff={isVideoOff}
+                    />
                     <Controls ref={controlsRef} onPointerDown={onControlsPointerDown} onToggleMute={toggleMute} onToggleVideo={toggleVideo} onHangUp={handleHangUp} isMuted={isMuted} isVideoOff={isVideoOff} onToggleChat={handleToggleChat} unreadMessageCount={unreadMessageCount} />
                     <ChatPanel 
                         isVisible={isChatVisible}

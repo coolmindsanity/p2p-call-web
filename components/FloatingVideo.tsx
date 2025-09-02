@@ -16,7 +16,8 @@ interface FloatingVideoProps {
 }
 
 // FIX: Destructure title prop to render a <title> element for tooltips, which is better for accessibility.
-const MutedIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ title, ...props }) => (
+// FIX: Added `& { title?: string }` to the component's props type to allow passing a `title` prop for accessibility.
+const MutedIcon: React.FC<React.SVGProps<SVGSVGElement> & { title?: string }> = ({ title, ...props }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
        {title && <title>{title}</title>}
        <path d="M13.5 4.06c0-1.336-1.076-2.412-2.411-2.412A2.412 2.412 0 0 0 8.677 4.06v8.682a2.412 2.412 0 0 0 4.823 0V4.06Z" />
@@ -26,7 +27,8 @@ const MutedIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ title, ...props })
 );
    
 // FIX: Destructure title prop to render a <title> element for tooltips, which is better for accessibility.
-const VideoIsOffIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ title, ...props }) => (
+// FIX: Added `& { title?: string }` to the component's props type to allow passing a `title` prop for accessibility.
+const VideoIsOffIcon: React.FC<React.SVGProps<SVGSVGElement> & { title?: string }> = ({ title, ...props }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
        {title && <title>{title}</title>}
        <path d="M3.53 3.53a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 0 0 1.06-1.06l-18-18ZM20.25 11.625l1.58-1.58a1.5 1.5 0 0 0-1.06-2.56L18 8.935V7.5a3 3 0 0 0-3-3h-2.25l-1.822-1.823a.75.75 0 0 0-1.06 0l-.146.147-1.125 1.125a.75.75 0 0 0 0 1.06l.12.12L12 8.25V7.5h3v3.75l-4.28 4.28-.625.625a.75.75 0 0 0 0 1.06l.625.625 4.28 4.28V16.5h.75a3 3 0 0 0 3-3V11.625ZM4.5 19.5h8.25a3 3 0 0 0 3-3V13.125l-3.375-3.375L9 13.125v3.375h-3v-3.375l-.375-.375-1.5-1.5V16.5a3 3 0 0 0 3 3Z" />
