@@ -12,6 +12,14 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        rollupOptions: {
+          external: (id) => {
+            // Exclude Firebase modules that are loaded globally
+            return id.includes('firebase') && !id.includes('@firebase');
+          }
+        }
       }
     };
 });
