@@ -50,3 +50,5 @@ coverage/
 # Personal/backup files
 *.am
 .armin/
+
+CLAUDE.md

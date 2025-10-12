@@ -132,7 +132,8 @@ Configuration: `firebase.json` specifies `dist/` as the hosting directory with S
 - Display names are stored in localStorage (`p2p-user-display-name` key)
 - STUN servers from Google are configured in `constants.ts:2`
 - The app requires HTTPS in production for WebRTC getUserMedia API
-- Firebase credentials in `firebase.ts` should never be committed
+- Firebase credentials in `firebase.ts` should never be committed (file is in `.gitignore`)
 - Firebase SDK is loaded via CDN script tags in index.html (not via npm)
 - Ring timeout is 30 seconds (configurable via `RING_TIMEOUT_MS` in `useWebRTC.ts:10`)
 - Reconnection delay uses exponential backoff: 2000ms * attempt number
+- No CI/CD pipelines configured; deployment is manual via `firebase deploy`
