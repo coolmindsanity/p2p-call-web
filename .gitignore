@@ -50,5 +50,6 @@ coverage/
 # Personal/backup files
 *.am
 .armin/
+.zeroclue/
 
 CLAUDE.md
