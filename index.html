@@ -1,91 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF--8" />
+    <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>P2P Video Call</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class', // The app is now always in dark mode per the design.
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', '"Noto Sans"', 'sans-serif', '"Apple Color Emoji"', '"Segoe UI Emoji"', '"Segoe UI Symbol"', '"Noto Color Emoji"'],
-            },
-            animation: {
-              'fade-in-down': 'fade-in-down 0.5s ease-out forwards',
-              'pop': 'pop 0.4s ease-out',
-            },
-            keyframes: {
-              'fade-in-down': {
-                '0%': { opacity: '0', transform: 'translateY(-10px)' },
-                '100%': { opacity: '1', transform: 'translateY(0)' },
-              },
-              'pop': {
-                  '0%, 100%': { transform: 'scale(1)' },
-                  '50%': { transform: 'scale(1.3)' },
-              }
-            },
-          }
-        }
-      }
-    </script>
-    <style>
-      html {
-        overflow-y: scroll;
-      }
-      .custom-scrollbar::-webkit-scrollbar {
-        width: 6px;
-      }
-      .custom-scrollbar::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      .custom-scrollbar::-webkit-scrollbar-thumb {
-        background-color: rgba(107, 114, 128, 0.5); /* gray-500 with opacity */
-        border-radius: 20px;
-        border: transparent;
-      }
-      /* Dark grid background from the target image */
-      body {
-        background-color: #0d1117;
-        background-image:
-          linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-        background-size: 2rem 2rem;
-      }
-      .animate-fade-in-down {
-        animation: fade-in-down 0.5s ease-out forwards;
-        opacity: 0;
-      }
-      .animate-pop {
-        animation: pop 0.4s ease-out;
-      }
 
-      /* Style for the glowing effect on the glass container */
-      .glass-container-glow::after {
-        content: '';
-        position: absolute;
-        z-index: -1;
-        top: 50%;
-        left: 50%;
-        width: 150%;
-        height: 150%;
-        transform: translate(-50%, -50%);
-        border-radius: inherit;
-        background: 
-          radial-gradient(circle at 15% 50%, rgba(168, 85, 247, 0.5) 0%, transparent 50%), /* Purple glow on the left */
-          radial-gradient(circle at 85% 50%, rgba(16, 185, 129, 0.5) 0%, transparent 50%); /* Green glow on the right */
-        filter: blur(120px);
-        opacity: 0.9;
-      }
-      
-      .glass-card-background {
-        background: linear-gradient(160deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 50%),
-                    rgba(0, 0, 0, 0.3);
-      }
-    </style>
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#0d1117" />
+    <meta name="description" content="Simple, secure peer-to-peer video calling. No accounts, no tracking, just private connections." />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+
+    <title>P2P Video Call - Secure Video Calling</title>
   <script type="importmap">
 {
   "imports": {
@@ -100,6 +26,7 @@
     <div id="root"></div>
     <!-- Firebase SDKs for signaling -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script type="module" src="/index.tsx"></script>
   </body>

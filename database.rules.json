@@ -1,0 +1,70 @@
+{
+  "rules": {
+    "calls": {
+      "$callId": {
+        ".read": true,
+        ".write": "!data.exists() || (data.child('callerId').val() === auth.uid || data.child('joinerId').val() === auth.uid || data.child('declined').val() === true)",
+        ".validate": "newData.hasChildren(['callerId']) && newData.child('callId').val() === $callId",
+        "callerId": {
+          ".validate": "newData.isString()"
+        },
+        "joinerId": {
+          ".validate": "newData.isString()"
+        },
+        "offer": {
+          ".validate": "newData.isString()"
+        },
+        "answer": {
+          ".validate": "newData.isString()"
+        },
+        "encryptionKey": {
+          ".validate": "newData.hasChildren()"
+        },
+        "declined": {
+          ".validate": "newData.isBoolean()"
+        },
+        "offerCandidates": {
+          "$candidateId": {
+            ".validate": "newData.hasChildren(['candidate', 'sdpMLineIndex', 'sdpMid'])"
+          }
+        },
+        "answerCandidates": {
+          "$candidateId": {
+            ".validate": "newData.hasChildren(['candidate', 'sdpMLineIndex', 'sdpMid'])"
+          }
+        }
+      }
+    },
+    "users": {
+      "$userId": {
+        ".read": "auth != null && auth.uid === $userId",
+        ".write": "auth != null",
+        "incomingCall": {
+          ".validate": "newData.hasChildren(['from', 'callId'])",
+          "from": {
+            ".validate": "newData.isString()"
+          },
+          "callId": {
+            ".validate": "newData.isString()"
+          },
+          "callerAlias": {
+            ".validate": "newData.isString()"
+          }
+        }
+      }
+    },
+    "status": {
+      "$userId": {
+        ".read": true,
+        ".write": "auth != null && auth.uid === $userId",
+        ".validate": "newData.hasChildren(['isOnline', 'lastChanged'])",
+        "isOnline": {
+          ".validate": "newData.isBoolean()"
+        },
+        "lastChanged": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    }
+  }
+}

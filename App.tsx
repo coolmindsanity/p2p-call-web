@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
+import { useAuth } from './hooks/useAuth';
 import { CallState, CallHistoryEntry, PinnedEntry, CallStats, IncomingCall, PeerStatus, ChatMessage } from './types';
 import VideoPlayer from './components/VideoPlayer';
 import Controls from './components/Controls';
@@ -25,6 +26,7 @@ import { usePresence } from './hooks/usePresence';
 import { usePeerStatus } from './hooks/usePeerStatus';
 
 const App: React.FC = () => {
+    const { isAuthenticated, isAuthenticating, authError } = useAuth();
     const [userId] = useState(getUserId());
     const [history, setHistory] = useState<CallHistoryEntry[]>(() => getHistory());
     const [pinned, setPinned] = useState<PinnedEntry[]>(() => getPinned());
@@ -422,6 +424,72 @@ const App: React.FC = () => {
                 return <About />;
         }
     };
+
+    // Show loading screen while authenticating
+    if (isAuthenticating) {
+        return (
+            <div className="min-h-screen text-slate-200 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mb-4"></div>
+                    <p className="text-lg text-gray-400">Initializing secure connection...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error screen if authentication failed
+    if (authError) {
+        const isConfigError = authError.includes('Anonymous authentication is not enabled');
+
+        return (
+            <div className="min-h-screen text-slate-200 flex items-center justify-center p-4">
+                <div className="max-w-lg w-full bg-red-900/20 border border-red-500/50 rounded-lg p-8">
+                    <div className="text-center mb-6">
+                        <div className="inline-flex items-center justify-center w-16 h-16 bg-red-500/20 rounded-full mb-4">
+                            <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <h2 className="text-2xl font-bold text-red-400 mb-2">Authentication Required</h2>
+                    </div>
+
+                    <p className="text-gray-300 mb-6 text-left">{authError}</p>
+
+                    {isConfigError && (
+                        <div className="bg-gray-900/50 rounded-lg p-4 mb-6 text-left">
+                            <p className="text-sm text-gray-400 mb-3 font-semibold">How to fix:</p>
+                            <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside">
+                                <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">Firebase Console</a></li>
+                                <li>Select your project</li>
+                                <li>Navigate to <strong>Authentication</strong> → <strong>Sign-in method</strong></li>
+                                <li>Enable <strong>Anonymous</strong> authentication</li>
+                                <li>Return here and click Retry</li>
+                            </ol>
+                        </div>
+                    )}
+
+                    <div className="flex gap-3 justify-center">
+                        {isConfigError && (
+                            <a
+                                href="https://console.firebase.google.com"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition font-medium"
+                            >
+                                Open Firebase Console
+                            </a>
+                        )}
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition font-medium"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen text-slate-200">

@@ -20,17 +20,53 @@ npm run build
 
 # Preview production build
 npm run preview
+
+# Run tests
+npm test
+
+# Run tests with UI
+npm run test:ui
+
+# Run tests with coverage
+npm run test:coverage
 ```
 
 ## Firebase Setup
 
-The app requires Firebase Realtime Database for signaling:
+The app requires Firebase Realtime Database for signaling and Firebase Authentication for security:
 
 1. Copy `firebase.ts.example` to `firebase.ts`
 2. Add your Firebase configuration to `firebase.ts`
-3. **Important:** `firebase.ts` is gitignored to prevent credential exposure
+3. **Enable Anonymous Authentication** in Firebase Console
+4. **Deploy Security Rules**: Run `firebase deploy --only database` to deploy the rules from `database.rules.json`
+5. **Important:** `firebase.ts` is gitignored to prevent credential exposure
+
+### Firebase Security Rules
+
+The app includes comprehensive Firebase security rules (`database.rules.json`) that:
+- Require authentication for all database operations
+- Validate data structures for calls, users, and status
+- Restrict write access to authorized users only
+- Protect against unauthorized data modifications
 
 ## Architecture
+
+### Authentication
+
+The app uses **Firebase Anonymous Authentication** to secure the database while maintaining user privacy:
+- Users are automatically authenticated on app load
+- No personal information is collected or stored
+- Each user gets a unique anonymous UID
+- Authentication state is managed via `hooks/useAuth.ts`
+- Loading and error states are handled gracefully in `App.tsx`
+
+### Security Features
+
+1. **HTTPS Enforcement**: Automatically redirects to HTTPS in production (`utils/security.ts`)
+2. **WebRTC Feature Detection**: Checks browser support on startup
+3. **Error Boundary**: Global error handling with detailed logging (`components/ErrorBoundary.tsx`)
+4. **Security Headers**: Configured in `firebase.json` for HSTS, CSP, and XSS protection
+5. **E2EE Support Detection**: Checks for Insertable Streams API availability
 
 ### WebRTC Signaling Flow
 
@@ -46,6 +82,13 @@ The app uses Firebase Realtime Database as a signaling server for WebRTC connect
 - `/calls/{callId}` - Call signaling data (offer, answer, candidates, encryption key)
 - `/users/{userId}/incomingCall` - Incoming call notifications
 - `/status/{userId}` - User presence (isOnline, lastChanged)
+
+### ICE Server Configuration
+
+Configured in `constants.ts` with both STUN and TURN servers:
+- **STUN Servers**: Google's public STUN servers for NAT discovery
+- **TURN Servers**: Open Relay Project TURN servers for restrictive NAT traversal
+- For production, consider using paid TURN services (Twilio, Xirsys) for better reliability
 
 ### Call State Management
 
@@ -70,7 +113,9 @@ Browser support check: looks for `createEncodedStreams` in `RTCRtpSender.prototy
 ### Component Structure
 
 - **App.tsx**: Main application component managing state and routing between screens
+- **components/ErrorBoundary.tsx**: Global error boundary for catching and displaying React errors
 - **hooks/useWebRTC.ts**: Core WebRTC logic including peer connection, media streams, signaling, reconnection, and E2EE
+- **hooks/useAuth.ts**: Firebase authentication management
 - **hooks/usePresence.ts**: Firebase presence tracking for online/offline status
 - **hooks/usePeerStatus.ts**: Monitors presence status of pinned contacts
 - **hooks/useDraggable.ts**: Drag-and-drop functionality for floating UI elements
@@ -85,6 +130,16 @@ Browser support check: looks for `createEncodedStreams` in `RTCRtpSender.prototy
 - **Floating Video**: Draggable remote video overlay during calls
 - **Connection Stats**: Real-time display of packet loss, jitter, RTT, and bitrates (updated every 1 second)
 - **Presence System**: Firebase presence tracking at `/status/{userId}` with online/offline status and timestamps
+- **PWA Support**: Service worker for offline capability and installability
+
+### Progressive Web App (PWA)
+
+The app is configured as a PWA with:
+- Service worker (`public/sw.js`) for offline support and caching
+- Web app manifest (`public/manifest.json`) for installability
+- Cache-first strategy for static assets
+- Network-first strategy for Firebase API calls
+- Automatic cache cleanup on updates
 
 ### Data Channel Messages
 
@@ -112,6 +167,29 @@ Predefined constraints in `hooks/useWebRTC.ts:12`:
 - **utils/pins.ts**: localStorage persistence for pinned contacts
 - **utils/user.ts**: User ID generation and display name management
 - **utils/sounds.ts**: Audio feedback (incoming, connected, ringing, ended)
+- **utils/security.ts**: HTTPS enforcement and WebRTC feature detection
+
+### Styling
+
+The app uses **Tailwind CSS** with local build optimization:
+- Configuration in `tailwind.config.js`
+- PostCSS processing via `postcss.config.js`
+- Main styles in `index.css` with custom utilities and animations
+- Dark mode theme with glassmorphism effects
+- Optimized content paths to exclude node_modules
+
+## Testing
+
+The project uses **Vitest** for testing:
+- Configuration: `vitest.config.ts`
+- Test setup: `test/setup.ts` (mocks Firebase and WebRTC APIs)
+- Test files: `test/**/*.test.ts`
+- Coverage available via `npm run test:coverage`
+
+### Test Structure
+
+- `test/utils/id.test.ts`: Tests for ID generation utilities
+- `test/utils/security.test.ts`: Tests for security utilities and feature detection
 
 ## Deployment
 
@@ -121,19 +199,58 @@ The app is configured for Firebase Hosting:
 # Build and deploy
 npm run build
 firebase deploy
+
+# Deploy only database rules
+firebase deploy --only database
+
+# Deploy only hosting
+firebase deploy --only hosting
 ```
 
-Configuration: `firebase.json` specifies `dist/` as the hosting directory with SPA rewrites.
+Configuration: `firebase.json` specifies:
+- `dist/` as the hosting directory with SPA rewrites
+- Database security rules location
+- Security headers (HSTS, CSP, X-Frame-Options, etc.)
 
 ## Important Notes
 
+### Security
 - Call IDs must match pattern: `/^[a-z]+-[a-z]+-[a-z]+$/` (validated in `App.tsx:71`)
 - User IDs are anonymous UUIDs stored in localStorage (`p2p-user-id` key)
 - Display names are stored in localStorage (`p2p-user-display-name` key)
-- STUN servers from Google are configured in `constants.ts:2`
-- The app requires HTTPS in production for WebRTC getUserMedia API
+- The app requires HTTPS in production for WebRTC getUserMedia API (enforced in code)
 - Firebase credentials in `firebase.ts` should never be committed (file is in `.gitignore`)
-- Firebase SDK is loaded via CDN script tags in index.html (not via npm)
+- Anonymous authentication is required for database access
+- Database security rules must be deployed before first use
+
+### WebRTC Configuration
+- ICE servers (STUN + TURN) are configured in `constants.ts`
+- STUN servers from Google for NAT discovery
+- TURN servers from Open Relay Project for NAT traversal
+- For production, consider paid TURN services for better reliability
 - Ring timeout is 30 seconds (configurable via `RING_TIMEOUT_MS` in `useWebRTC.ts:10`)
 - Reconnection delay uses exponential backoff: 2000ms * attempt number
+
+### External Dependencies
+- React 19 and Firebase SDK are loaded via CDN (see `index.html`)
+- Tailwind CSS is built locally and bundled
+- All other dependencies are npm-managed
+
+### Development
 - No CI/CD pipelines configured; deployment is manual via `firebase deploy`
+- Service worker caching may require hard refresh during development
+- Use `npm run preview` to test production build locally
+- Tests can be run in watch mode by omitting `--run` flag
+
+## Browser Support
+
+Requires modern browsers with:
+- WebRTC support (RTCPeerConnection, getUserMedia)
+- Insertable Streams (for E2EE - optional)
+- Service Worker (for PWA - optional)
+- ES2022 features
+
+Recommended:
+- Chrome/Edge 90+
+- Firefox 90+
+- Safari 15.4+ (limited E2EE support)

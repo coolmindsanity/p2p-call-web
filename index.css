@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    overflow-y: scroll;
+  }
+
+  body {
+    @apply bg-gray-950 text-slate-200 antialiased font-sans;
+    background-color: #0d1117;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 2rem 2rem;
+  }
+
+  :root {
+    color-scheme: dark;
+  }
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(107, 114, 128, 0.5);
+    border-radius: 20px;
+    border: transparent;
+  }
+
+  .animate-fade-in-down {
+    animation: fade-in-down 0.5s ease-out forwards;
+    opacity: 0;
+  }
+
+  .animate-pop {
+    animation: pop 0.4s ease-out;
+  }
+
+  .glass-container-glow::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    top: 50%;
+    left: 50%;
+    width: 150%;
+    height: 150%;
+    transform: translate(-50%, -50%);
+    border-radius: inherit;
+    background:
+      radial-gradient(circle at 15% 50%, rgba(168, 85, 247, 0.5) 0%, transparent 50%),
+      radial-gradient(circle at 85% 50%, rgba(16, 185, 129, 0.5) 0%, transparent 50%);
+    filter: blur(120px);
+    opacity: 0.9;
+  }
+
+  .glass-card-background {
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 50%),
+                rgba(0, 0, 0, 0.3);
+  }
+}
