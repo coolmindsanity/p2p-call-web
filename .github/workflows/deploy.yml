@@ -28,6 +28,11 @@ jobs:
       - name: Install dependencies
         run: npm install
         
+      - name: Clear npm cache and reinstall
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+        
       - name: Run tests
         run: npm test
         
