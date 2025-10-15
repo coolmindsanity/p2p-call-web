@@ -39,6 +39,7 @@ firebase.initializeApp(firebaseConfig);
 // Initialize Firebase Authentication and sign in anonymously
 export const auth = firebase.auth();
 export const db = firebase.database();
+export const ServerValue = firebase.database.ServerValue;
 
 // Sign in anonymously - this maintains privacy while securing the database
 let authInitialized = false;
