@@ -12,7 +12,7 @@
     ],
     "rewrites": [
       {
-        "source": "**!(*.@(js|css|json|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|webp|webm|mp4|mp3|wav))",
+        "source": "**",
         "destination": "/index.html"
       }
     ],
