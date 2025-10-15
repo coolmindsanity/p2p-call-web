@@ -43,7 +43,7 @@ jobs:
         run: npx tsc --noEmit || echo "TypeScript check completed with warnings"
         
       - name: Generate Firebase configuration
-        run: node scripts/generate-firebase-config.js
+        run: node scripts/generate-firebase-config.cjs
         env:
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
           FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
